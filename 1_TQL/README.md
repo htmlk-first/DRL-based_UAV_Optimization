@@ -48,3 +48,17 @@ python train.py
 - 5,000 에피소드 학습 후 **성공률 100%** 달성
 - 평균 보상: **189.0**
 - 최적 경로: 22 스텝, 잔여 에너지 5.0
+
+### 학습 곡선
+![Training Curve](results/training_curve.png)
+
+### 최적 경로
+![Best Path](results/best_path.png)
+
+### Q-Value 히트맵
+| WP 방문 전 (아무것도 방문하지 않은 상태) | WP1 방문 후 (WP1 → WP2 이동 중) |
+|:---:|:---:|
+| ![Q-Value WP0](results/qvalue_heatmap_wp0.png) | ![Q-Value WP1](results/qvalue_heatmap_wp1.png) |
+
+### 비행 경로 애니메이션
+![Flight GIF](results/flight.gif)
