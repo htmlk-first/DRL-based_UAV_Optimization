@@ -1,0 +1,179 @@
+"""
+DDPG 3D 학습 및 평가 스크립트
+──────────────────────────────────────
+3_2_DDQN_3D 대비 변경:
+  - DDPGAgent (Actor-Critic) 사용
+  - 3D 연속 행동 공간: ε-greedy 없이 OU Noise로 탐색
+  - Critic + Actor 손실 각각 기록 및 시각화
+  - Noise sigma 감쇠 (에피소드 단위)
+  - 유클리드 거리 기반 에너지 + z축 추가 비용
+"""
+import os
+import numpy as np
+
+from env.config import EnvConfig3D
+from env.uav_env import UAVEnv3D
+from visualize import (plot_reward_curve, plot_path_3d,
+                       plot_critic_loss, plot_actor_loss,
+                       plot_success_curve, make_flight_gif_3d)
+from ddpg_agent import DDPGAgent
+
+
+def train(config, agent, n_episodes=3000, print_every=500):
+    env = UAVEnv3D(config)
+    rewards_history = []
+    success_history = []
+    critic_losses = []
+    actor_losses = []
+
+    for ep in range(1, n_episodes + 1):
+        obs, _ = env.reset()
+        agent.noise.reset()
+        total_reward = 0
+        done = False
+
+        while not done:
+            action = agent.select_action(obs, add_noise=True)
+            next_obs, reward, terminated, truncated, info = env.step(action)
+            done = terminated or truncated
+
+            agent.store(obs, action, reward, next_obs, float(done))
+            c_loss, a_loss = agent.learn()
+            if c_loss is not None:
+                critic_losses.append(c_loss)
+            if a_loss is not None:
+                actor_losses.append(a_loss)
+
+            obs = next_obs
+            total_reward += reward
+
+        agent.decay_noise()
+        rewards_history.append(total_reward)
+        success_history.append(1 if info["event"] == "mission_complete" else 0)
+
+        if ep % print_every == 0:
+            avg_r = np.mean(rewards_history[-print_every:])
+            avg_s = np.mean(success_history[-print_every:]) * 100
+            avg_cl = np.mean(critic_losses[-1000:]) if critic_losses else 0
+            avg_al = np.mean(actor_losses[-1000:]) if actor_losses else 0
+            print(f"[Ep {ep:5d}] AvgReward: {avg_r:8.1f} | "
+                  f"Success: {avg_s:5.1f}% | "
+                  f"Noise σ: {agent.noise.sigma:.4f} | "
+                  f"CriticL: {avg_cl:.4f} | ActorL: {avg_al:.4f} | "
+                  f"Buffer: {len(agent.buffer)}")
+
+    return rewards_history, success_history, critic_losses, actor_losses
+
+
+def evaluate(config, agent, n_episodes=10):
+    env = UAVEnv3D(config)
+
+    total_rewards = []
+    successes = 0
+
+    for ep in range(n_episodes):
+        obs, _ = env.reset()
+        total_reward = 0
+        done = False
+
+        while not done:
+            action = agent.select_action(obs, add_noise=False)
+            obs, reward, terminated, truncated, info = env.step(action)
+            done = terminated or truncated
+            total_reward += reward
+
+        total_rewards.append(total_reward)
+        if info["event"] == "mission_complete":
+            successes += 1
+
+    print(f"\n=== Evaluation ({n_episodes} episodes) ===")
+    print(f"Avg Reward: {np.mean(total_rewards):.1f}")
+    print(f"Success Rate: {successes}/{n_episodes} ({successes/n_episodes*100:.0f}%)")
+
+    env.render()
+    print(f"Path length: {len(env.path)}")
+    return env
+
+
+if __name__ == "__main__":
+    # ── 설정 ──
+    config = EnvConfig3D(
+        grid_size_x=30,
+        grid_size_y=30,
+        grid_size_z=5,
+        obstacle_mode="fixed",
+        num_buildings=40,
+        energy_budget_multiplier=3.0,
+        max_step_size=1.5,
+        max_step_size_z=1.0,
+        wp_reach_radius=1.0,
+        z_cost_multiplier=1.5,
+    )
+
+    tmp_env = UAVEnv3D(config)
+    obs_dim = tmp_env.observation_space.shape[0]
+    act_dim = tmp_env.action_space.shape[0]
+
+    agent = DDPGAgent(
+        state_dim=obs_dim,
+        action_dim=act_dim,
+        actor_lr=1e-4,
+        critic_lr=1e-3,
+        gamma=0.99,
+        tau=0.005,
+        batch_size=128,
+        buffer_capacity=200000,
+        hidden_dim=256,
+        noise_sigma=0.3,
+        noise_sigma_min=0.01,
+        noise_decay=0.9995,
+        grad_clip=1.0,
+    )
+
+    # ── 학습 ──
+    print("=== DDPG 3D Training Start ===")
+    print(f"Grid: {config.grid_size_x}x{config.grid_size_y}x{config.grid_size_z}")
+    print(f"Waypoints: {config.waypoints}")
+    print(f"Energy budget: {config.compute_energy_budget():.0f}")
+    print(f"Max step size (XY): {config.max_step_size}, (Z): {config.max_step_size_z}")
+    print(f"WP reach radius: {config.wp_reach_radius}")
+    print(f"Z cost multiplier: {config.z_cost_multiplier}")
+    print(f"State dim: {obs_dim}, Action dim: {act_dim}")
+    print(f"Device: {agent.device}")
+
+    rewards, successes, c_losses, a_losses = train(
+        config, agent, n_episodes=3000, print_every=500
+    )
+
+    # ── 저장 ──
+    save_dir = os.path.join(os.path.dirname(__file__), "results")
+    os.makedirs(save_dir, exist_ok=True)
+    agent.save(os.path.join(save_dir, "ddpg_3d_model.pt"))
+
+    # ── 학습 곡선 ──
+    plot_reward_curve(rewards, window=50, title="DDPG 3D Training Curve",
+                      save_path=os.path.join(save_dir, "training_curve.png"))
+
+    plot_success_curve(successes, window=50, title="DDPG 3D Success Rate",
+                       save_path=os.path.join(save_dir, "success_curve.png"))
+
+    if c_losses:
+        plot_critic_loss(c_losses, window=50, title="DDPG 3D Critic Loss",
+                         save_path=os.path.join(save_dir, "critic_loss.png"))
+
+    if a_losses:
+        plot_actor_loss(a_losses, window=50, title="DDPG 3D Actor Loss",
+                        save_path=os.path.join(save_dir, "actor_loss.png"))
+
+    # ── 평가 ──
+    env = evaluate(config, agent, n_episodes=10)
+
+    # ── 경로 시각화 ──
+    plot_path_3d(env, title="DDPG 3D - Best Path",
+                 save_path=os.path.join(save_dir, "best_path_3d.png"))
+
+    # ── GIF ──
+    make_flight_gif_3d(env, title="DDPG 3D Flight",
+                       save_path=os.path.join(save_dir, "flight_3d.gif"), fps=5)
+
+    print(f"\n=== Results saved to {save_dir} ===")
