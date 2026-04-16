@@ -1,6 +1,6 @@
 """
-UAV 3D Environment Configuration (DDPG 3D용)
-- 3_2_DDQN_3D 기반 → DDPG 확장: 연속 행동 공간 (continuous action space)
+UAV 3D Environment Configuration (PPO 3D용)
+- 4_2_DDPG_3D 기반 → PPO 3D 확장
 - 30×30×5 3D 공간, 3개 웨이포인트, 건물형 장애물
 - 연속 좌표 이동 (실수 좌표, 임의 방향/크기)
 """
@@ -49,6 +49,7 @@ class EnvConfig3D:
         self.penalty_obstacle = kwargs.get("penalty_obstacle", -10.0)
         self.penalty_step = kwargs.get("penalty_step", -0.5)
         self.penalty_energy_out = kwargs.get("penalty_energy_out", -50.0)
+        self.penalty_z_reversal = kwargs.get("penalty_z_reversal", -1.0)
 
         # ── Reward Shaping ──
         self.gamma_shaping = kwargs.get("gamma_shaping", 0.99)
