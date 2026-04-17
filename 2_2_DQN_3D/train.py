@@ -2,6 +2,7 @@
 DQN 3D 학습 및 평가 스크립트
 """
 import os
+import csv
 import numpy as np
 
 from env.config import EnvConfig3D
@@ -12,16 +13,26 @@ from visualize import (plot_reward_curve, plot_path_3d,
 from dqn_agent import DQNAgent
 
 
-def train(config, agent, n_episodes=5000, print_every=500):
+def train(config, agent, n_episodes=3000, print_every=500, log_path=None):
     env = UAVEnv3D(config)
     rewards_history = []
     success_history = []
     loss_history = []
 
+    csv_file = None
+    csv_writer = None
+    if log_path is not None:
+        os.makedirs(os.path.dirname(os.path.abspath(log_path)), exist_ok=True)
+        csv_file = open(log_path, "w", newline="", encoding="utf-8")
+        csv_writer = csv.writer(csv_file)
+        csv_writer.writerow(["episode", "reward", "success", "epsilon",
+                              "ep_avg_loss", "buffer_size"])
+
     for ep in range(1, n_episodes + 1):
         obs, _ = env.reset()
         total_reward = 0
         done = False
+        ep_losses = []
 
         while not done:
             action = agent.select_action(obs)
@@ -32,13 +43,20 @@ def train(config, agent, n_episodes=5000, print_every=500):
             loss = agent.learn()
             if loss is not None:
                 loss_history.append(loss)
+                ep_losses.append(loss)
 
             obs = next_obs
             total_reward += reward
 
         agent.decay_epsilon()
+        success = 1 if info["event"] == "mission_complete" else 0
         rewards_history.append(total_reward)
-        success_history.append(1 if info["event"] == "mission_complete" else 0)
+        success_history.append(success)
+
+        if csv_writer is not None:
+            ep_avg_loss = float(np.mean(ep_losses)) if ep_losses else float("nan")
+            csv_writer.writerow([ep, total_reward, success, agent.epsilon,
+                                  ep_avg_loss, len(agent.buffer)])
 
         if ep % print_every == 0:
             avg_r = np.mean(rewards_history[-print_every:])
@@ -49,6 +67,9 @@ def train(config, agent, n_episodes=5000, print_every=500):
                   f"Epsilon: {agent.epsilon:.4f} | "
                   f"AvgLoss: {avg_l:.4f} | "
                   f"Buffer: {len(agent.buffer)}")
+
+    if csv_file is not None:
+        csv_file.close()
 
     return rewards_history, success_history, loss_history
 
@@ -115,16 +136,21 @@ if __name__ == "__main__":
         hidden_dim=256,
     )
 
+    # ── 저장 경로 ──
+    save_dir = os.path.join(os.path.dirname(__file__), "results")
+    os.makedirs(save_dir, exist_ok=True)
+
     # ── 학습 ──
     print("=== DQN 3D Training Start ===")
     print(f"Grid: {config.grid_size_x}x{config.grid_size_y}x{config.grid_size_z}")
     print(f"State dim: {obs_dim}, Action dim: {act_dim}")
     print(f"Device: {agent.device}")
-    rewards, successes, losses = train(config, agent, n_episodes=5000, print_every=500)
+    rewards, successes, losses = train(
+        config, agent, n_episodes=3000, print_every=500,
+        log_path=os.path.join(save_dir, "training_log.csv"),
+    )
 
-    # ── 저장 ──
-    save_dir = os.path.join(os.path.dirname(__file__), "results")
-    os.makedirs(save_dir, exist_ok=True)
+    # ── 모델 저장 ──
     agent.save(os.path.join(save_dir, "dqn_3d_model.pt"))
 
     # ── 학습 곡선 ──

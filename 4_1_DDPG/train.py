@@ -8,6 +8,7 @@ DDQN 대비 변경:
   - Noise sigma 감쇠 (에피소드 단위)
 """
 import os
+import csv
 import numpy as np
 
 from env.config import EnvConfig
@@ -18,18 +19,29 @@ from visualize import (plot_reward_curve, plot_path,
 from ddpg_agent import DDPGAgent
 
 
-def train(config, agent, n_episodes=4000, print_every=500):
+def train(config, agent, n_episodes=1500, print_every=500, log_path=None):
     env = UAVEnv(config)
     rewards_history = []
     success_history = []
     critic_losses = []
     actor_losses = []
 
+    csv_file = None
+    csv_writer = None
+    if log_path is not None:
+        os.makedirs(os.path.dirname(os.path.abspath(log_path)), exist_ok=True)
+        csv_file = open(log_path, "w", newline="", encoding="utf-8")
+        csv_writer = csv.writer(csv_file)
+        csv_writer.writerow(["episode", "reward", "success", "noise_sigma",
+                              "ep_avg_critic_loss", "ep_avg_actor_loss", "buffer_size"])
+
     for ep in range(1, n_episodes + 1):
         obs, _ = env.reset()
         agent.noise.reset()
         total_reward = 0
         done = False
+        ep_critic_losses = []
+        ep_actor_losses = []
 
         while not done:
             action = agent.select_action(obs, add_noise=True)
@@ -40,15 +52,24 @@ def train(config, agent, n_episodes=4000, print_every=500):
             c_loss, a_loss = agent.learn()
             if c_loss is not None:
                 critic_losses.append(c_loss)
+                ep_critic_losses.append(c_loss)
             if a_loss is not None:
                 actor_losses.append(a_loss)
+                ep_actor_losses.append(a_loss)
 
             obs = next_obs
             total_reward += reward
 
         agent.decay_noise()
+        success = 1 if info["event"] == "mission_complete" else 0
         rewards_history.append(total_reward)
-        success_history.append(1 if info["event"] == "mission_complete" else 0)
+        success_history.append(success)
+
+        if csv_writer is not None:
+            ep_avg_cl = float(np.mean(ep_critic_losses)) if ep_critic_losses else float("nan")
+            ep_avg_al = float(np.mean(ep_actor_losses)) if ep_actor_losses else float("nan")
+            csv_writer.writerow([ep, total_reward, success, agent.noise.sigma,
+                                  ep_avg_cl, ep_avg_al, len(agent.buffer)])
 
         if ep % print_every == 0:
             avg_r = np.mean(rewards_history[-print_every:])
@@ -60,6 +81,9 @@ def train(config, agent, n_episodes=4000, print_every=500):
                   f"Noise σ: {agent.noise.sigma:.4f} | "
                   f"CriticL: {avg_cl:.4f} | ActorL: {avg_al:.4f} | "
                   f"Buffer: {len(agent.buffer)}")
+
+    if csv_file is not None:
+        csv_file.close()
 
     return rewards_history, success_history, critic_losses, actor_losses
 
@@ -124,6 +148,10 @@ if __name__ == "__main__":
         grad_clip=1.0,
     )
 
+    # ── 저장 경로 ──
+    save_dir = os.path.join(os.path.dirname(__file__), "results")
+    os.makedirs(save_dir, exist_ok=True)
+
     # ── 학습 ──
     print("=== DDPG Training Start ===")
     print(f"Grid: {config.grid_size}x{config.grid_size}")
@@ -135,12 +163,11 @@ if __name__ == "__main__":
     print(f"Device: {agent.device}")
 
     rewards, successes, c_losses, a_losses = train(
-        config, agent, n_episodes=4000, print_every=500
+        config, agent, n_episodes=1500, print_every=500,
+        log_path=os.path.join(save_dir, "training_log.csv"),
     )
 
-    # ── 저장 ──
-    save_dir = os.path.join(os.path.dirname(__file__), "results")
-    os.makedirs(save_dir, exist_ok=True)
+    # ── 모델 저장 ──
     agent.save(os.path.join(save_dir, "ddpg_model.pt"))
 
     # ── 학습 곡선 ──

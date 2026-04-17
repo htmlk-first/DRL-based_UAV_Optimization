@@ -10,6 +10,7 @@ SAC 3D 학습 및 평가 스크립트
 """
 import os
 import sys
+import csv
 import copy
 import numpy as np
 import torch
@@ -20,22 +21,36 @@ from sac_agent import SACAgent
 
 
 def train(agent, env, num_episodes, update_after=1000, update_every=1,
-          print_every=500):
+          print_every=500, log_path=None):
     """
     Off-policy SAC 학습 루프 (3D)
 
     Args:
         update_after: 학습 시작 전 최소 버퍼 크기 (random exploration)
         update_every: 몇 스텝마다 네트워크 업데이트
+        log_path: CSV 로그 저장 경로 (None이면 저장 안 함)
     """
     reward_history = []
     success_history = []
     total_steps = 0
 
+    csv_file = None
+    csv_writer = None
+    if log_path is not None:
+        os.makedirs(os.path.dirname(os.path.abspath(log_path)), exist_ok=True)
+        csv_file = open(log_path, "w", newline="", encoding="utf-8")
+        csv_writer = csv.writer(csv_file)
+        csv_writer.writerow(["episode", "reward", "success", "alpha",
+                              "ep_avg_actor_loss", "ep_avg_critic_loss",
+                              "buffer_size", "total_steps"])
+
     for ep in range(1, num_episodes + 1):
         state, _ = env.reset()
         ep_reward = 0.0
         done = False
+
+        actor_log_start = len(agent.actor_loss_log)
+        critic_log_start = len(agent.critic_loss_log)
 
         while not done:
             total_steps += 1
@@ -61,6 +76,15 @@ def train(agent, env, num_episodes, update_after=1000, update_every=1,
         success = 1 if info.get("event") == "mission_complete" else 0
         success_history.append(success)
 
+        if csv_writer is not None:
+            ep_actor_losses = agent.actor_loss_log[actor_log_start:]
+            ep_critic_losses = agent.critic_loss_log[critic_log_start:]
+            ep_avg_al = float(np.mean(ep_actor_losses)) if ep_actor_losses else float("nan")
+            ep_avg_cl = float(np.mean(ep_critic_losses)) if ep_critic_losses else float("nan")
+            csv_writer.writerow([ep, ep_reward, success, agent.alpha,
+                                  ep_avg_al, ep_avg_cl,
+                                  len(agent.buffer), total_steps])
+
         if ep % print_every == 0:
             avg_r = np.mean(reward_history[-print_every:])
             avg_s = np.mean(success_history[-print_every:]) * 100
@@ -68,6 +92,9 @@ def train(agent, env, num_episodes, update_after=1000, update_every=1,
             print(f"[Ep {ep:5d}] AvgReward={avg_r:8.1f} | "
                   f"Success={avg_s:5.1f}% | Alpha={alpha:.4f} | "
                   f"Buffer={len(agent.buffer)} | Steps={total_steps}")
+
+    if csv_file is not None:
+        csv_file.close()
 
     return reward_history, success_history
 
@@ -130,7 +157,7 @@ def evaluate(agent, base_config, num_eval=10):
 
 if __name__ == "__main__":
     # ── 하이퍼파라미터 ──
-    NUM_EPISODES = 10000
+    NUM_EPISODES = 1500
     LR_ACTOR = 3e-4
     LR_CRITIC = 3e-4
     LR_ALPHA = 3e-4
@@ -178,6 +205,10 @@ if __name__ == "__main__":
         initial_alpha=INITIAL_ALPHA,
     )
 
+    # ── 저장 경로 ──
+    save_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results")
+    os.makedirs(save_dir, exist_ok=True)
+
     print("=" * 60)
     print("SAC 3D Training Start")
     print(f"  Grid: {config.grid_size_x}x{config.grid_size_y}x{config.grid_size_z}")
@@ -198,6 +229,7 @@ if __name__ == "__main__":
         update_after=UPDATE_AFTER,
         update_every=UPDATE_EVERY,
         print_every=PRINT_EVERY,
+        log_path=os.path.join(save_dir, "training_log.csv"),
     )
 
     # ── 평가 ──
@@ -212,9 +244,7 @@ if __name__ == "__main__":
     if best_env:
         best_env.render()
 
-    # ── 저장 ──
-    save_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results")
-    os.makedirs(save_dir, exist_ok=True)
+    # ── 모델 저장 ──
     agent.save(os.path.join(save_dir, "sac_3d_model.pt"))
     print(f"  Model saved → {save_dir}")
 

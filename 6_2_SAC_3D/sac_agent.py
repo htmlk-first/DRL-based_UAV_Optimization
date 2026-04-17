@@ -163,9 +163,11 @@ class SACAgent:
         buffer_capacity=100_000,
         batch_size=256,
         initial_alpha=0.2,
-        device="cpu",
+        device=None,
     ):
-        self.device = torch.device(device)
+        self.device = torch.device(device) if device is not None else torch.device(
+            "cuda" if torch.cuda.is_available() else "cpu"
+        )
         self.gamma = gamma
         self.tau = tau
         self.batch_size = batch_size

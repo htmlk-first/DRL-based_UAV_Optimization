@@ -9,6 +9,7 @@ PPO 3D 학습 및 평가 스크립트
   - PPO 핵심 알고리즘은 동일 (On-Policy, GAE, Clipped Surrogate)
 """
 import os
+import csv
 import numpy as np
 
 from env.config import EnvConfig3D
@@ -20,13 +21,22 @@ from visualize import (plot_reward_curve, plot_path_3d,
 from ppo_agent import PPOAgent
 
 
-def train(config, agent, n_episodes=4000, print_every=500):
+def train(config, agent, n_episodes=4000, print_every=500, log_path=None):
     env = UAVEnv3D(config)
     rewards_history = []
     success_history = []
     policy_losses = []
     value_losses = []
     entropies = []
+
+    csv_file = None
+    csv_writer = None
+    if log_path is not None:
+        os.makedirs(os.path.dirname(os.path.abspath(log_path)), exist_ok=True)
+        csv_file = open(log_path, "w", newline="", encoding="utf-8")
+        csv_writer = csv.writer(csv_file)
+        csv_writer.writerow(["episode", "reward", "success",
+                              "policy_loss", "value_loss", "entropy", "learning_rate"])
 
     for ep in range(1, n_episodes + 1):
         obs, _ = env.reset()
@@ -55,8 +65,16 @@ def train(config, agent, n_episodes=4000, print_every=500):
             value_losses.append(v_loss)
             entropies.append(entropy)
 
+        success = 1 if info["event"] == "mission_complete" else 0
         rewards_history.append(total_reward)
-        success_history.append(1 if info["event"] == "mission_complete" else 0)
+        success_history.append(success)
+
+        if csv_writer is not None:
+            p_loss_val = float(p_loss) if p_loss is not None else float("nan")
+            v_loss_val = float(v_loss) if v_loss is not None else float("nan")
+            entropy_val = float(entropy) if entropy is not None else float("nan")
+            csv_writer.writerow([ep, total_reward, success,
+                                  p_loss_val, v_loss_val, entropy_val, agent.current_lr()])
 
         if ep % print_every == 0:
             avg_r = np.mean(rewards_history[-print_every:])
@@ -69,6 +87,9 @@ def train(config, agent, n_episodes=4000, print_every=500):
                   f"Success: {avg_s:5.1f}% | "
                   f"PolicyL: {avg_pl:.4f} | ValueL: {avg_vl:.4f} | "
                   f"Entropy: {avg_ent:.4f} | LR: {lr:.2e}")
+
+    if csv_file is not None:
+        csv_file.close()
 
     return rewards_history, success_history, policy_losses, value_losses, entropies
 
@@ -176,6 +197,10 @@ if __name__ == "__main__":
         total_updates=N_EPISODES,
     )
 
+    # ── 저장 경로 ──
+    save_dir = os.path.join(os.path.dirname(__file__), "results")
+    os.makedirs(save_dir, exist_ok=True)
+
     # ── 학습 ──
     print("=== PPO 3D Training Start ===")
     print(f"Grid: {config.grid_size_x}x{config.grid_size_y}x{config.grid_size_z}")
@@ -192,12 +217,11 @@ if __name__ == "__main__":
           f"Entropy coeff: {agent.entropy_coeff}")
 
     rewards, successes, p_losses, v_losses, ents = train(
-        config, agent, n_episodes=N_EPISODES, print_every=500
+        config, agent, n_episodes=N_EPISODES, print_every=500,
+        log_path=os.path.join(save_dir, "training_log.csv"),
     )
 
-    # ── 저장 ──
-    save_dir = os.path.join(os.path.dirname(__file__), "results")
-    os.makedirs(save_dir, exist_ok=True)
+    # ── 모델 저장 ──
     agent.save(os.path.join(save_dir, "ppo_3d_model.pt"))
 
     # ── 학습 곡선 ──
