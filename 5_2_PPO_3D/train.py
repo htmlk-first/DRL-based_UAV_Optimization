@@ -188,7 +188,7 @@ if __name__ == "__main__":
         gae_lambda=0.95,
         clip_epsilon=0.2,
         entropy_coeff=0.01,
-        value_coeff=0.5,
+        value_coeff=0.25,
         max_grad_norm=0.5,
         k_epochs=10,
         mini_batch_size=64,

@@ -19,7 +19,7 @@ from visualize import (plot_reward_curve, plot_path,
 from ddpg_agent import DDPGAgent
 
 
-def train(config, agent, n_episodes=1500, print_every=500, log_path=None):
+def train(config, agent, n_episodes=2000, print_every=500, log_path=None):
     env = UAVEnv(config)
     rewards_history = []
     success_history = []
@@ -140,11 +140,11 @@ if __name__ == "__main__":
         gamma=0.99,
         tau=0.005,
         batch_size=128,
-        buffer_capacity=200000,
+        buffer_capacity=80000,
         hidden_dim=256,
         noise_sigma=0.3,
         noise_sigma_min=0.01,
-        noise_decay=0.9995,
+        noise_decay=0.9972,
         grad_clip=1.0,
     )
 
@@ -163,7 +163,7 @@ if __name__ == "__main__":
     print(f"Device: {agent.device}")
 
     rewards, successes, c_losses, a_losses = train(
-        config, agent, n_episodes=1500, print_every=500,
+        config, agent, n_episodes=2000, print_every=500,
         log_path=os.path.join(save_dir, "training_log.csv"),
     )
 

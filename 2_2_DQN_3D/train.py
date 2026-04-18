@@ -129,7 +129,7 @@ if __name__ == "__main__":
         gamma=0.99,
         epsilon=1.0,
         epsilon_min=0.01,
-        epsilon_decay=0.999,
+        epsilon_decay=0.998,
         batch_size=64,
         buffer_capacity=100000,
         target_update_freq=500,

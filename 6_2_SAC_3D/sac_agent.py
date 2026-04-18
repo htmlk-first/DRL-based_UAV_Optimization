@@ -185,7 +185,7 @@ class SACAgent:
         self.critic_optim = torch.optim.Adam(self.critic.parameters(), lr=lr_critic)
 
         # ── Automatic Entropy Tuning ──
-        self.target_entropy = -float(action_dim)
+        self.target_entropy = -0.5 * float(action_dim)
         self.log_alpha = torch.tensor(
             np.log(initial_alpha), dtype=torch.float32,
             device=self.device, requires_grad=True,
@@ -247,8 +247,8 @@ class SACAgent:
 
         # ── 2) Actor Update ──
         new_a, new_log_prob = self.actor.sample(s)
-        q1_new = self.critic.q1_forward(s, new_a)
-        actor_loss = (alpha * new_log_prob - q1_new).mean()
+        q1_new, q2_new = self.critic(s, new_a)
+        actor_loss = (alpha * new_log_prob - torch.min(q1_new, q2_new)).mean()
 
         self.actor_optim.zero_grad()
         actor_loss.backward()

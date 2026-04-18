@@ -161,7 +161,7 @@ if __name__ == "__main__":
     BATCH_SIZE = 256
     BUFFER_CAPACITY = 200_000
     UPDATE_AFTER = 1000        # 랜덤 탐색 스텝 수
-    UPDATE_EVERY = 1           # 매 스텝마다 업데이트
+    UPDATE_EVERY = 2           # 매 스텝마다 업데이트
     INITIAL_ALPHA = 0.2
     PRINT_EVERY = 500
     EVAL_EPISODES = 20

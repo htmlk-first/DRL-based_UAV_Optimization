@@ -61,7 +61,7 @@ class ActorCriticNetwork(nn.Module):
         self.actor_ln2 = nn.LayerNorm(hidden_dim)
         self.actor_mean = nn.Linear(hidden_dim, action_dim)
         # 학습 가능한 log_std 파라미터 (행동 차원별 독립)
-        self.actor_log_std = nn.Parameter(torch.full((action_dim,), -0.5))
+        self.actor_log_std = nn.Parameter(torch.full((action_dim,), -1.0))
 
         # ── Critic (가치 네트워크): state → V(s) ──
         self.critic_fc1 = nn.Linear(state_dim, hidden_dim)
@@ -87,7 +87,7 @@ class ActorCriticNetwork(nn.Module):
         x = F.relu(self.actor_ln1(self.actor_fc1(state)))
         x = F.relu(self.actor_ln2(self.actor_fc2(x)))
         mean = torch.tanh(self.actor_mean(x))
-        std = torch.exp(torch.clamp(self.actor_log_std, -3.0, -0.5))
+        std = torch.exp(torch.clamp(self.actor_log_std, -3.0, 0.5))
         return mean, std
 
     def critic(self, state):
@@ -382,7 +382,8 @@ class PPOAgent:
         # ── 학습률 스케줄링 ──
         self.update_count += 1
         if self.lr_decay and self.total_updates:
-            frac = max(1.0 - self.update_count / self.total_updates, 0.0)
+            min_lr_frac = 0.05
+            frac = max(1.0 - self.update_count / self.total_updates, min_lr_frac)
             new_lr = self.initial_lr * frac
             for pg in self.optimizer.param_groups:
                 pg["lr"] = new_lr

@@ -46,7 +46,7 @@ class ActorCriticNetwork(nn.Module):
         self.actor_ln2 = nn.LayerNorm(hidden_dim)
         self.actor_mean = nn.Linear(hidden_dim, action_dim)
         # 학습 가능한 log_std 파라미터 (행동 차원별 독립)
-        self.actor_log_std = nn.Parameter(torch.full((action_dim,), -0.5))
+        self.actor_log_std = nn.Parameter(torch.full((action_dim,), -1.0))
 
         # ── Critic (가치 네트워크): state → V(s) ──
         self.critic_fc1 = nn.Linear(state_dim, hidden_dim)
@@ -72,7 +72,7 @@ class ActorCriticNetwork(nn.Module):
         x = F.relu(self.actor_ln1(self.actor_fc1(state)))
         x = F.relu(self.actor_ln2(self.actor_fc2(x)))
         mean = torch.tanh(self.actor_mean(x))
-        std = torch.exp(torch.clamp(self.actor_log_std, -2.0, -0.3))
+        std = torch.exp(torch.clamp(self.actor_log_std, -2.0, 0.5))
         return mean, std
 
     def critic(self, state):
