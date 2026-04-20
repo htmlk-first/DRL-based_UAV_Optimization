@@ -8,7 +8,7 @@ import numpy as np
 class EnvConfig:
     def __init__(self, **kwargs):
         # ── Grid ──
-        self.grid_size = kwargs.get("grid_size", 30)
+        self.grid_size = kwargs.get("grid_size", 50)
 
         # ── UAV Start Position ──
         self.start_pos = kwargs.get("start_pos", (0, 0))
@@ -20,14 +20,17 @@ class EnvConfig:
         # ── Obstacles ──
         self.obstacle_mode = kwargs.get("obstacle_mode", "fixed")
         self.fixed_obstacles = kwargs.get("fixed_obstacles", None)
-        self.num_random_obstacles = kwargs.get("num_random_obstacles", 15)
+        default_random_obstacles = max(25, self.grid_size * self.grid_size // 60)
+        self.num_random_obstacles = kwargs.get(
+            "num_random_obstacles", default_random_obstacles
+        )
         self.random_seed = kwargs.get("random_seed", 42)
 
         if self.fixed_obstacles is None:
             self.fixed_obstacles = self._default_obstacles(self.grid_size)
 
         # ── Energy ──
-        self.energy_budget_multiplier = kwargs.get("energy_budget_multiplier", 2.5)
+        self.energy_budget_multiplier = kwargs.get("energy_budget_multiplier", 2.8)
         self.move_cost = kwargs.get("move_cost", 1.0)
 
         # ── Rewards ──
@@ -42,7 +45,7 @@ class EnvConfig:
         self.gamma_shaping = kwargs.get("gamma_shaping", 0.99)
 
         # ── Max Steps ──
-        self.max_steps = kwargs.get("max_steps", self.grid_size * self.grid_size)
+        self.max_steps = kwargs.get("max_steps", self.grid_size * 30)
 
     def _default_waypoints(self, size):
         """3개 웨이포인트: 1/3 지점, 2/3 지점, 끝 지점"""

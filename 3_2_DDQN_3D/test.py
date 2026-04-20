@@ -62,10 +62,11 @@ def evaluate(config, agent, n_episodes=10):
 
 if __name__ == "__main__":
     config = EnvConfig3D(
-        grid_size_x=30, grid_size_y=30, grid_size_z=5,
+        grid_size_x=50, grid_size_y=50, grid_size_z=8,
         obstacle_mode="fixed",
-        num_buildings=40,
-        energy_budget_multiplier=2.5,
+        num_buildings=110,
+        energy_budget_multiplier=3.0,
+        max_steps=900,
     )
 
     tmp_env = UAVEnv3D(config)
@@ -74,13 +75,23 @@ if __name__ == "__main__":
 
     agent = DDQNAgent(
         state_dim=obs_dim, action_dim=act_dim,
-        lr=5e-4, gamma=0.99,
-        epsilon=1.0, epsilon_min=0.01, epsilon_decay=0.998,
-        batch_size=64, buffer_capacity=100000,
-        target_update_freq=500, hidden_dim=256,
-        grad_clip=1.0,
+        lr=1e-4, gamma=0.99,
+        epsilon=1.0, epsilon_min=0.05, epsilon_decay=0.9990,
+        batch_size=256, buffer_capacity=250000,
+        target_update_freq=1000, hidden_dim=256,
+        grad_clip=2.0,
+        reward_scale=0.05,
+        warmup_steps=10000,
+        learn_every=2,
+        target_tau=0.005,
     )
-    agent.load(os.path.join(RESULTS, "ddqn_3d_model.pt"))
+    best_model_path = os.path.join(RESULTS, "ddqn_3d_best_model.pt")
+    model_path = (
+        best_model_path
+        if os.path.exists(best_model_path)
+        else os.path.join(RESULTS, "ddqn_3d_model.pt")
+    )
+    agent.load(model_path)
     agent.epsilon = 0.0
 
     # ── Training history plots ──

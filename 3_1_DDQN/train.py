@@ -1,7 +1,3 @@
-"""
-Double DQN 학습 및 평가 스크립트
-- DQN 대비 변경: DDQNAgent 사용, 환경 30×30 + 3 웨이포인트
-"""
 import os
 import csv
 import numpy as np
@@ -14,7 +10,7 @@ from visualize import (plot_reward_curve, plot_path,
 from ddqn_agent import DDQNAgent
 
 
-def train(config, agent, n_episodes=2000, print_every=500, log_path=None):
+def train(config, agent, n_episodes=4000, print_every=500, log_path=None):
     env = UAVEnv(config)
     rewards_history = []
     success_history = []
@@ -112,9 +108,10 @@ def evaluate(config, agent, n_episodes=10):
 if __name__ == "__main__":
     # ── 설정 ──
     config = EnvConfig(
-        grid_size=30,
+        grid_size=50,
         obstacle_mode="fixed",
-        energy_budget_multiplier=2.5,
+        energy_budget_multiplier=2.8,
+        max_steps=1500,
     )
 
     tmp_env = UAVEnv(config)
@@ -124,16 +121,16 @@ if __name__ == "__main__":
     agent = DDQNAgent(
         state_dim=obs_dim,
         action_dim=act_dim,
-        lr=5e-4,
+        lr=3e-4,
         gamma=0.99,
         epsilon=1.0,
-        epsilon_min=0.01,
-        epsilon_decay=0.997,
-        batch_size=64,
-        buffer_capacity=100000,
-        target_update_freq=500,
+        epsilon_min=0.02,
+        epsilon_decay=0.9985,
+        batch_size=128,
+        buffer_capacity=250000,
+        target_update_freq=1000,
         hidden_dim=256,
-        grad_clip=10.0,
+        grad_clip=5.0,
     )
 
     # ── 저장 경로 ──
@@ -144,11 +141,13 @@ if __name__ == "__main__":
     print("=== Double DQN Training Start ===")
     print(f"Grid: {config.grid_size}x{config.grid_size}")
     print(f"Waypoints: {config.waypoints}")
+    print(f"Obstacles: {len(config.get_obstacles())}")
     print(f"Energy budget: {config.compute_energy_budget():.0f}")
+    print(f"Max steps: {config.max_steps}")
     print(f"State dim: {obs_dim}, Action dim: {act_dim}")
     print(f"Device: {agent.device}")
     rewards, successes, losses = train(
-        config, agent, n_episodes=2000, print_every=500,
+        config, agent, n_episodes=4000, print_every=500,
         log_path=os.path.join(save_dir, "training_log.csv"),
     )
 

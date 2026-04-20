@@ -1,7 +1,3 @@
-"""
-Double DQN 3D 학습 및 평가 스크립트
-- 3_1_DDQN → 3D 확장: 30×30×5 그리드, 3개 웨이포인트, 6방향 이동
-"""
 import os
 import csv
 import numpy as np
@@ -14,11 +10,23 @@ from visualize import (plot_reward_curve, plot_path_3d,
 from ddqn_agent import DDQNAgent
 
 
-def train(config, agent, n_episodes=3000, print_every=500, log_path=None):
+def train(
+    config,
+    agent,
+    n_episodes=4000,
+    print_every=500,
+    log_path=None,
+    best_model_path=None,
+    success_window=200,
+    early_stop_success_rate=0.98,
+    min_episodes=1800,
+):
     env = UAVEnv3D(config)
     rewards_history = []
     success_history = []
     loss_history = []
+    best_score = -float("inf")
+    best_episode = 0
 
     csv_file = None
     csv_writer = None
@@ -53,6 +61,24 @@ def train(config, agent, n_episodes=3000, print_every=500, log_path=None):
         success = 1 if info["event"] == "mission_complete" else 0
         rewards_history.append(total_reward)
         success_history.append(success)
+        stop_training = False
+
+        if len(success_history) >= success_window:
+            recent_success = float(np.mean(success_history[-success_window:]))
+            recent_reward = float(np.mean(rewards_history[-success_window:]))
+            score = recent_success * 1000.0 + recent_reward
+            if score > best_score:
+                best_score = score
+                best_episode = ep
+                if best_model_path is not None:
+                    agent.save(best_model_path)
+
+            if ep >= min_episodes and recent_success >= early_stop_success_rate:
+                print(f"[Ep {ep:5d}] Early stop: "
+                      f"{recent_success * 100:.1f}% success over "
+                      f"last {success_window} episodes. "
+                      f"Best checkpoint: episode {best_episode}.")
+                stop_training = True
 
         if csv_writer is not None:
             ep_avg_loss = float(np.mean(ep_losses)) if ep_losses else float("nan")
@@ -68,6 +94,9 @@ def train(config, agent, n_episodes=3000, print_every=500, log_path=None):
                   f"Epsilon: {agent.epsilon:.4f} | "
                   f"AvgLoss: {avg_l:.4f} | "
                   f"Buffer: {len(agent.buffer)}")
+
+        if stop_training:
+            break
 
     if csv_file is not None:
         csv_file.close()
@@ -112,12 +141,13 @@ def evaluate(config, agent, n_episodes=10):
 if __name__ == "__main__":
     # ── 설정 ──
     config = EnvConfig3D(
-        grid_size_x=30,
-        grid_size_y=30,
-        grid_size_z=5,
+        grid_size_x=50,
+        grid_size_y=50,
+        grid_size_z=8,
         obstacle_mode="fixed",
-        num_buildings=40,
-        energy_budget_multiplier=2.5,
+        num_buildings=110,
+        energy_budget_multiplier=3.0,
+        max_steps=900,
     )
 
     tmp_env = UAVEnv3D(config)
@@ -127,16 +157,20 @@ if __name__ == "__main__":
     agent = DDQNAgent(
         state_dim=obs_dim,
         action_dim=act_dim,
-        lr=5e-4,
+        lr=1e-4,
         gamma=0.99,
         epsilon=1.0,
-        epsilon_min=0.01,
-        epsilon_decay=0.998,
-        batch_size=64,
-        buffer_capacity=100000,
-        target_update_freq=500,
+        epsilon_min=0.05,
+        epsilon_decay=0.9990,
+        batch_size=256,
+        buffer_capacity=250000,
+        target_update_freq=1000,
         hidden_dim=256,
-        grad_clip=1.0,
+        grad_clip=2.0,
+        reward_scale=0.05,
+        warmup_steps=10000,
+        learn_every=2,
+        target_tau=0.005,
     )
 
     # ── 저장 경로 ──
@@ -147,13 +181,20 @@ if __name__ == "__main__":
     print("=== Double DQN 3D Training Start ===")
     print(f"Grid: {config.grid_size_x}x{config.grid_size_y}x{config.grid_size_z}")
     print(f"Waypoints: {config.waypoints}")
+    print(f"Buildings: {len(config.get_buildings())} ({len(config.get_obstacles())} blocked cells)")
     print(f"Energy budget: {config.compute_energy_budget():.0f}")
+    print(f"Max steps: {config.max_steps}")
     print(f"State dim: {obs_dim}, Action dim: {act_dim}")
     print(f"Device: {agent.device}")
+    best_model_path = os.path.join(save_dir, "ddqn_3d_best_model.pt")
     rewards, successes, losses = train(
-        config, agent, n_episodes=3000, print_every=500,
+        config, agent, n_episodes=4000, print_every=500,
         log_path=os.path.join(save_dir, "training_log.csv"),
+        best_model_path=best_model_path,
     )
+
+    if os.path.exists(best_model_path):
+        agent.load(best_model_path)
 
     # ── 모델 저장 ──
     agent.save(os.path.join(save_dir, "ddqn_3d_model.pt"))

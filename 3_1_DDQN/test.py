@@ -61,7 +61,12 @@ def evaluate(config, agent, n_episodes=10):
 
 
 if __name__ == "__main__":
-    config = EnvConfig(grid_size=30, obstacle_mode="fixed")
+    config = EnvConfig(
+        grid_size=50,
+        obstacle_mode="fixed",
+        energy_budget_multiplier=2.8,
+        max_steps=1500,
+    )
 
     tmp_env = UAVEnv(config)
     obs_dim = tmp_env.observation_space.shape[0]
@@ -69,11 +74,11 @@ if __name__ == "__main__":
 
     agent = DDQNAgent(
         state_dim=obs_dim, action_dim=act_dim,
-        lr=5e-4, gamma=0.99,
-        epsilon=1.0, epsilon_min=0.01, epsilon_decay=0.997,
-        batch_size=64, buffer_capacity=100000,
-        target_update_freq=500, hidden_dim=256,
-        grad_clip=10.0,
+        lr=3e-4, gamma=0.99,
+        epsilon=1.0, epsilon_min=0.02, epsilon_decay=0.9985,
+        batch_size=128, buffer_capacity=250000,
+        target_update_freq=1000, hidden_dim=256,
+        grad_clip=5.0,
     )
     agent.load(os.path.join(RESULTS, "ddqn_model.pt"))
     agent.epsilon = 0.0

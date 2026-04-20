@@ -32,7 +32,7 @@ class QNetwork(nn.Module):
 
 class ReplayBuffer:
     """Experience Replay Buffer"""
-    def __init__(self, capacity=50000):
+    def __init__(self, capacity=250000):
         self.buffer = deque(maxlen=capacity)
 
     def push(self, state, action, reward, next_state, done):
@@ -67,16 +67,16 @@ class DDQNAgent:
         self,
         state_dim,
         action_dim,
-        lr=1e-3,
+        lr=3e-4,
         gamma=0.99,
         epsilon=1.0,
-        epsilon_min=0.01,
-        epsilon_decay=0.998,
-        batch_size=64,
-        buffer_capacity=50000,
-        target_update_freq=200,
-        hidden_dim=128,
-        grad_clip=10.0,
+        epsilon_min=0.02,
+        epsilon_decay=0.9985,
+        batch_size=128,
+        buffer_capacity=250000,
+        target_update_freq=1000,
+        hidden_dim=256,
+        grad_clip=5.0,
         device=None,
     ):
         self.state_dim = state_dim

@@ -30,7 +30,7 @@ class QNetwork(nn.Module):
 
 
 class ReplayBuffer:
-    def __init__(self, capacity=50000):
+    def __init__(self, capacity=250000):
         self.buffer = deque(maxlen=capacity)
 
     def push(self, state, action, reward, next_state, done):
@@ -65,16 +65,20 @@ class DDQNAgent:
         self,
         state_dim,
         action_dim,
-        lr=1e-3,
+        lr=1e-4,
         gamma=0.99,
         epsilon=1.0,
-        epsilon_min=0.01,
-        epsilon_decay=0.998,
-        batch_size=64,
-        buffer_capacity=50000,
-        target_update_freq=200,
-        hidden_dim=128,
-        grad_clip=10.0,
+        epsilon_min=0.05,
+        epsilon_decay=0.9990,
+        batch_size=256,
+        buffer_capacity=250000,
+        target_update_freq=1000,
+        hidden_dim=256,
+        grad_clip=2.0,
+        reward_scale=0.05,
+        warmup_steps=10000,
+        learn_every=2,
+        target_tau=0.005,
         device=None,
     ):
         self.state_dim = state_dim
@@ -86,6 +90,10 @@ class DDQNAgent:
         self.batch_size = batch_size
         self.target_update_freq = target_update_freq
         self.grad_clip = grad_clip
+        self.reward_scale = reward_scale
+        self.warmup_steps = warmup_steps if warmup_steps is not None else batch_size
+        self.learn_every = max(1, learn_every)
+        self.target_tau = target_tau
 
         self.device = device or torch.device(
             "cuda" if torch.cuda.is_available() else "cpu"
@@ -97,10 +105,11 @@ class DDQNAgent:
         self.target_net.eval()
 
         self.optimizer = optim.Adam(self.q_net.parameters(), lr=lr)
-        self.loss_fn = nn.MSELoss()
+        self.loss_fn = nn.SmoothL1Loss()
 
         self.buffer = ReplayBuffer(buffer_capacity)
         self.learn_step_count = 0
+        self.learn_call_count = 0
 
     def select_action(self, state):
         if np.random.random() < self.epsilon:
@@ -120,7 +129,10 @@ class DDQNAgent:
         DQN:  next_q = max_a' Q_target(s', a')
         DDQN: next_q = Q_target(s', argmax_a' Q_online(s', a'))
         """
-        if len(self.buffer) < self.batch_size:
+        self.learn_call_count += 1
+        if len(self.buffer) < max(self.batch_size, self.warmup_steps):
+            return None
+        if self.learn_call_count % self.learn_every != 0:
             return None
 
         states, actions, rewards, next_states, dones = self.buffer.sample(
@@ -129,7 +141,7 @@ class DDQNAgent:
 
         states_t = torch.FloatTensor(states).to(self.device)
         actions_t = torch.LongTensor(actions).to(self.device)
-        rewards_t = torch.FloatTensor(rewards).to(self.device)
+        rewards_t = torch.FloatTensor(rewards).to(self.device) * self.reward_scale
         next_states_t = torch.FloatTensor(next_states).to(self.device)
         dones_t = torch.FloatTensor(dones).to(self.device)
 
@@ -151,10 +163,20 @@ class DDQNAgent:
         self.optimizer.step()
 
         self.learn_step_count += 1
-        if self.learn_step_count % self.target_update_freq == 0:
+        if self.target_tau > 0.0:
+            self._soft_update_target()
+        elif self.learn_step_count % self.target_update_freq == 0:
             self.target_net.load_state_dict(self.q_net.state_dict())
 
         return loss.item()
+
+    def _soft_update_target(self):
+        with torch.no_grad():
+            for target_param, param in zip(
+                self.target_net.parameters(), self.q_net.parameters()
+            ):
+                target_param.data.mul_(1.0 - self.target_tau)
+                target_param.data.add_(self.target_tau * param.data)
 
     def decay_epsilon(self):
         self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)

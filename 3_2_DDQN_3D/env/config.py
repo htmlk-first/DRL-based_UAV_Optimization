@@ -8,9 +8,9 @@ import numpy as np
 class EnvConfig3D:
     def __init__(self, **kwargs):
         # ── Grid ──
-        self.grid_size_x = kwargs.get("grid_size_x", 30)
-        self.grid_size_y = kwargs.get("grid_size_y", 30)
-        self.grid_size_z = kwargs.get("grid_size_z", 5)
+        self.grid_size_x = kwargs.get("grid_size_x", 50)
+        self.grid_size_y = kwargs.get("grid_size_y", 50)
+        self.grid_size_z = kwargs.get("grid_size_z", 8)
 
         # ── UAV Start Position (x, y, z) ──
         self.start_pos = kwargs.get("start_pos", (0, 0, 0))
@@ -22,7 +22,10 @@ class EnvConfig3D:
         # ── Obstacles (건물형: 지상 z=0에서 랜덤 높이) ──
         self.obstacle_mode = kwargs.get("obstacle_mode", "fixed")
         self.fixed_obstacles = kwargs.get("fixed_obstacles", None)
-        self.num_buildings = kwargs.get("num_buildings", 40)
+        default_num_buildings = max(
+            40, int(round(self.grid_size_x * self.grid_size_y * 0.045))
+        )
+        self.num_buildings = kwargs.get("num_buildings", default_num_buildings)
         self.min_building_height = kwargs.get("min_building_height", 1)
         self.max_building_height = kwargs.get("max_building_height", None)
         self.random_seed = kwargs.get("random_seed", 42)
@@ -32,7 +35,7 @@ class EnvConfig3D:
             self.fixed_obstacles = self._default_obstacles()
 
         # ── Energy ──
-        self.energy_budget_multiplier = kwargs.get("energy_budget_multiplier", 2.5)
+        self.energy_budget_multiplier = kwargs.get("energy_budget_multiplier", 3.0)
         self.move_cost = kwargs.get("move_cost", 1.0)
         self.move_cost_z = kwargs.get("move_cost_z", 1.5)
 
@@ -48,8 +51,8 @@ class EnvConfig3D:
         self.gamma_shaping = kwargs.get("gamma_shaping", 0.99)
 
         # ── Max Steps ──
-        vol = self.grid_size_x * self.grid_size_y * self.grid_size_z
-        self.max_steps = kwargs.get("max_steps", vol)
+        default_max_steps = self.grid_size_x * self.grid_size_y
+        self.max_steps = kwargs.get("max_steps", default_max_steps)
 
     def _default_waypoints(self):
         """3개 웨이포인트: 1/3, 2/3, 끝 지점 (z축 변화 포함)"""
