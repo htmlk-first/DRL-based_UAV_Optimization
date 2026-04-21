@@ -229,6 +229,10 @@ class UAVEnv3D(gym.Env):
               f"Buildings: {len(self.buildings)} ({len(self.obstacles)} cells) | "
               f"Path len: {len(self.path)}")
 
+        if self.grid_size_x * self.grid_size_y > 2500:
+            print("Layer render skipped for large grids; use saved PNG/GIF for visualization.")
+            return
+
         iz = int(z)
         symbols = {0: "· ", 1: "██", 2: "◎ ", 3: "✈ ", 4: "✓ "}
         print(f"\n── Z={iz} layer ──")

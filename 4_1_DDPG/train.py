@@ -19,7 +19,7 @@ from visualize import (plot_reward_curve, plot_path,
 from ddpg_agent import DDPGAgent
 
 
-def train(config, agent, n_episodes=2000, print_every=500, log_path=None):
+def train(config, agent, n_episodes=5000, print_every=500, log_path=None):
     env = UAVEnv(config)
     rewards_history = []
     success_history = []
@@ -121,11 +121,13 @@ def evaluate(config, agent, n_episodes=10):
 if __name__ == "__main__":
     # ── 설정 ──
     config = EnvConfig(
-        grid_size=30,
+        grid_size=100,
         obstacle_mode="fixed",
-        energy_budget_multiplier=3.0,
-        max_step_size=1.5,
-        wp_reach_radius=1.0,
+        obstacle_footprint_size=3,
+        energy_budget_multiplier=3.4,
+        max_step_size=2.2,
+        wp_reach_radius=1.8,
+        max_steps=1200,
     )
 
     tmp_env = UAVEnv(config)
@@ -140,11 +142,11 @@ if __name__ == "__main__":
         gamma=0.99,
         tau=0.005,
         batch_size=128,
-        buffer_capacity=80000,
+        buffer_capacity=250000,
         hidden_dim=256,
-        noise_sigma=0.3,
-        noise_sigma_min=0.01,
-        noise_decay=0.9972,
+        noise_sigma=0.4,
+        noise_sigma_min=0.025,
+        noise_decay=0.9983,
         grad_clip=1.0,
     )
 
@@ -155,6 +157,8 @@ if __name__ == "__main__":
     # ── 학습 ──
     print("=== DDPG Training Start ===")
     print(f"Grid: {config.grid_size}x{config.grid_size}")
+    print(f"Obstacles: {config.num_random_obstacles} "
+          f"({config.obstacle_footprint_x}x{config.obstacle_footprint_y} footprint)")
     print(f"Waypoints: {config.waypoints}")
     print(f"Energy budget: {config.compute_energy_budget():.0f}")
     print(f"Max step size: {config.max_step_size}")
@@ -163,7 +167,7 @@ if __name__ == "__main__":
     print(f"Device: {agent.device}")
 
     rewards, successes, c_losses, a_losses = train(
-        config, agent, n_episodes=2000, print_every=500,
+        config, agent, n_episodes=5000, print_every=500,
         log_path=os.path.join(save_dir, "training_log.csv"),
     )
 

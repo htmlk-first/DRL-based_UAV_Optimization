@@ -20,7 +20,7 @@ from visualize import (plot_reward_curve, plot_path_3d,
 from ddpg_agent import DDPGAgent
 
 
-def train(config, agent, n_episodes=2000, print_every=500, log_path=None):
+def train(config, agent, n_episodes=6000, print_every=500, log_path=None):
     env = UAVEnv3D(config)
     rewards_history = []
     success_history = []
@@ -122,16 +122,18 @@ def evaluate(config, agent, n_episodes=10):
 if __name__ == "__main__":
     # ── 설정 ──
     config = EnvConfig3D(
-        grid_size_x=30,
-        grid_size_y=30,
-        grid_size_z=5,
+        grid_size_x=100,
+        grid_size_y=100,
+        grid_size_z=10,
         obstacle_mode="fixed",
-        num_buildings=40,
-        energy_budget_multiplier=3.0,
-        max_step_size=1.5,
+        building_footprint_size=3,
+        num_buildings=50,
+        energy_budget_multiplier=3.6,
+        max_step_size=2.2,
         max_step_size_z=1.0,
-        wp_reach_radius=1.0,
-        z_cost_multiplier=1.5,
+        wp_reach_radius=2.0,
+        z_cost_multiplier=1.7,
+        max_steps=1500,
     )
 
     tmp_env = UAVEnv3D(config)
@@ -146,11 +148,11 @@ if __name__ == "__main__":
         gamma=0.99,
         tau=0.005,
         batch_size=128,
-        buffer_capacity=100000,
+        buffer_capacity=300000,
         hidden_dim=256,
-        noise_sigma=0.3,
-        noise_sigma_min=0.01,
-        noise_decay=0.9972,
+        noise_sigma=0.4,
+        noise_sigma_min=0.025,
+        noise_decay=0.9985,
         grad_clip=1.0,
     )
 
@@ -161,6 +163,8 @@ if __name__ == "__main__":
     # ── 학습 ──
     print("=== DDPG 3D Training Start ===")
     print(f"Grid: {config.grid_size_x}x{config.grid_size_y}x{config.grid_size_z}")
+    print(f"Buildings: {config.num_buildings} "
+          f"({config.building_footprint_x}x{config.building_footprint_y} footprint)")
     print(f"Waypoints: {config.waypoints}")
     print(f"Energy budget: {config.compute_energy_budget():.0f}")
     print(f"Max step size (XY): {config.max_step_size}, (Z): {config.max_step_size_z}")
@@ -170,7 +174,7 @@ if __name__ == "__main__":
     print(f"Device: {agent.device}")
 
     rewards, successes, c_losses, a_losses = train(
-        config, agent, n_episodes=2000, print_every=500,
+        config, agent, n_episodes=6000, print_every=500,
         log_path=os.path.join(save_dir, "training_log.csv"),
     )
 

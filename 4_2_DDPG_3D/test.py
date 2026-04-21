@@ -64,13 +64,15 @@ def evaluate(config, agent, n_episodes=10):
 
 if __name__ == "__main__":
     config = EnvConfig3D(
-        grid_size_x=30, grid_size_y=30, grid_size_z=5,
+        grid_size_x=100, grid_size_y=100, grid_size_z=10,
         obstacle_mode="fixed",
-        num_buildings=40,
-        energy_budget_multiplier=3.0,
-        max_step_size=1.5, max_step_size_z=1.0,
-        wp_reach_radius=1.0,
-        z_cost_multiplier=1.5,
+        building_footprint_size=3,
+        num_buildings=50,
+        energy_budget_multiplier=3.6,
+        max_step_size=2.2, max_step_size_z=1.0,
+        wp_reach_radius=2.0,
+        z_cost_multiplier=1.7,
+        max_steps=1500,
     )
 
     tmp_env = UAVEnv3D(config)
@@ -81,9 +83,9 @@ if __name__ == "__main__":
         state_dim=obs_dim, action_dim=act_dim,
         actor_lr=1e-4, critic_lr=5e-4,
         gamma=0.99, tau=0.005,
-        batch_size=128, buffer_capacity=100000,
+        batch_size=128, buffer_capacity=300000,
         hidden_dim=256,
-        noise_sigma=0.3, noise_sigma_min=0.01, noise_decay=0.9972,
+        noise_sigma=0.4, noise_sigma_min=0.025, noise_decay=0.9985,
         grad_clip=1.0,
     )
     agent.load(os.path.join(RESULTS, "ddpg_3d_model.pt"))

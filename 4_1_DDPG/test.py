@@ -64,11 +64,13 @@ def evaluate(config, agent, n_episodes=10):
 
 if __name__ == "__main__":
     config = EnvConfig(
-        grid_size=30,
+        grid_size=100,
         obstacle_mode="fixed",
-        energy_budget_multiplier=3.0,
-        max_step_size=1.5,
-        wp_reach_radius=1.0,
+        obstacle_footprint_size=3,
+        energy_budget_multiplier=3.4,
+        max_step_size=2.2,
+        wp_reach_radius=1.8,
+        max_steps=1200,
     )
 
     tmp_env = UAVEnv(config)
@@ -79,9 +81,9 @@ if __name__ == "__main__":
         state_dim=obs_dim, action_dim=act_dim,
         actor_lr=1e-4, critic_lr=1e-3,
         gamma=0.99, tau=0.005,
-        batch_size=128, buffer_capacity=200000,
+        batch_size=128, buffer_capacity=250000,
         hidden_dim=256,
-        noise_sigma=0.3, noise_sigma_min=0.01, noise_decay=0.9995,
+        noise_sigma=0.4, noise_sigma_min=0.025, noise_decay=0.9983,
         grad_clip=1.0,
     )
     agent.load(os.path.join(RESULTS, "ddpg_model.pt"))
