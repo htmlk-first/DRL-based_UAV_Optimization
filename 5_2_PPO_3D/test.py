@@ -86,13 +86,16 @@ def evaluate(config, agent, n_episodes=10):
 
 if __name__ == "__main__":
     config = EnvConfig3D(
-        grid_size_x=30, grid_size_y=30, grid_size_z=5,
+        grid_size_x=100, grid_size_y=100, grid_size_z=10,
         obstacle_mode="fixed",
-        num_buildings=40,
-        energy_budget_multiplier=4.0,
-        max_step_size=1.5, max_step_size_z=1.0,
-        wp_reach_radius=1.0,
-        z_cost_multiplier=1.5,
+        building_footprint_size=3,
+        num_buildings=50,
+        energy_budget_multiplier=3.6,
+        max_step_size=2.2, max_step_size_z=1.0,
+        wp_reach_radius=2.0,
+        z_cost_multiplier=1.7,
+        penalty_z_reversal=-1.0,
+        max_steps=1500,
     )
 
     tmp_env = UAVEnv3D(config)
@@ -101,14 +104,22 @@ if __name__ == "__main__":
 
     agent = PPOAgent(
         state_dim=obs_dim, action_dim=act_dim,
-        lr=3e-4, gamma=0.99,
-        gae_lambda=0.95, clip_epsilon=0.2,
-        entropy_coeff=0.01, value_coeff=0.5,
-        max_grad_norm=0.5, k_epochs=10,
-        mini_batch_size=64, hidden_dim=256,
+        lr=1.5e-4, gamma=0.99,
+        gae_lambda=0.93, clip_epsilon=0.12,
+        entropy_coeff=0.004, value_coeff=0.5,
+        max_grad_norm=0.35, k_epochs=4,
+        mini_batch_size=256, hidden_dim=256,
         lr_decay=False,
+        target_kl=0.025,
+        initial_log_std=-1.0,
+        log_std_min=-3.0,
+        log_std_max=-0.8,
     )
-    agent.load(os.path.join(RESULTS, "ppo_3d_model.pt"))
+    model_path = os.path.join(RESULTS, "ppo_3d_best_model.pt")
+    if not os.path.exists(model_path):
+        model_path = os.path.join(RESULTS, "ppo_3d_model.pt")
+    print(f"Loading model: {model_path}")
+    agent.load(model_path)
 
     # ── Training history plots ──
     rewards, successes, p_losses, v_losses, ents = load_log()

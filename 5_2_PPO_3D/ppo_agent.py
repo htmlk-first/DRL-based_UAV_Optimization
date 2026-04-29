@@ -36,7 +36,15 @@ class ActorCriticNetwork(nn.Module):
     Critic: state → V(s)
     """
 
-    def __init__(self, state_dim, action_dim, hidden_dim=256):
+    def __init__(
+        self,
+        state_dim,
+        action_dim,
+        hidden_dim=256,
+        initial_log_std=-1.0,
+        log_std_min=-3.0,
+        log_std_max=-0.8,
+    ):
         super().__init__()
 
         # ── Actor (정책 네트워크): state → (mean, log_std) ──
@@ -46,7 +54,11 @@ class ActorCriticNetwork(nn.Module):
         self.actor_ln2 = nn.LayerNorm(hidden_dim)
         self.actor_mean = nn.Linear(hidden_dim, action_dim)
         # 학습 가능한 log_std 파라미터 (행동 차원별 독립)
-        self.actor_log_std = nn.Parameter(torch.full((action_dim,), -1.0))
+        self.log_std_min = log_std_min
+        self.log_std_max = log_std_max
+        self.actor_log_std = nn.Parameter(
+            torch.full((action_dim,), initial_log_std)
+        )
 
         # ── Critic (가치 네트워크): state → V(s) ──
         self.critic_fc1 = nn.Linear(state_dim, hidden_dim)
@@ -72,7 +84,11 @@ class ActorCriticNetwork(nn.Module):
         x = F.relu(self.actor_ln1(self.actor_fc1(state)))
         x = F.relu(self.actor_ln2(self.actor_fc2(x)))
         mean = torch.tanh(self.actor_mean(x))
-        std = torch.exp(torch.clamp(self.actor_log_std, -2.0, 0.5))
+        std = torch.exp(torch.clamp(
+            self.actor_log_std,
+            self.log_std_min,
+            self.log_std_max,
+        ))
         return mean, std
 
     def critic(self, state):
@@ -141,18 +157,22 @@ class PPOAgent:
         self,
         state_dim,
         action_dim,
-        lr=3e-4,
+        lr=1.5e-4,
         gamma=0.99,
-        gae_lambda=0.95,
-        clip_epsilon=0.2,
-        entropy_coeff=0.01,
+        gae_lambda=0.93,
+        clip_epsilon=0.12,
+        entropy_coeff=0.004,
         value_coeff=0.5,
-        max_grad_norm=0.5,
-        k_epochs=10,
-        mini_batch_size=64,
+        max_grad_norm=0.35,
+        k_epochs=4,
+        mini_batch_size=256,
         hidden_dim=256,
         lr_decay=True,
         total_updates=None,
+        target_kl=0.025,
+        initial_log_std=-1.0,
+        log_std_min=-3.0,
+        log_std_max=-0.8,
         device=None,
     ):
         self.state_dim = state_dim
@@ -165,6 +185,7 @@ class PPOAgent:
         self.max_grad_norm = max_grad_norm
         self.k_epochs = k_epochs
         self.mini_batch_size = mini_batch_size
+        self.target_kl = target_kl
 
         self.device = device or torch.device(
             "cuda" if torch.cuda.is_available() else "cpu"
@@ -172,7 +193,12 @@ class PPOAgent:
 
         # ── Actor-Critic Network (단일 네트워크, 타겟 네트워크 없음) ──
         self.network = ActorCriticNetwork(
-            state_dim, action_dim, hidden_dim
+            state_dim,
+            action_dim,
+            hidden_dim,
+            initial_log_std=initial_log_std,
+            log_std_min=log_std_min,
+            log_std_max=log_std_max,
         ).to(self.device)
 
         self.optimizer = optim.Adam(self.network.parameters(), lr=lr, eps=1e-5)
@@ -280,6 +306,7 @@ class PPOAgent:
         total_entropy = 0.0
         n_updates = 0
 
+        stop_update = False
         for _ in range(self.k_epochs):
             # ── Mini-batch 셔플 ──
             indices = np.random.permutation(n)
@@ -299,6 +326,7 @@ class PPOAgent:
                 dist = Normal(mean, std)
                 new_log_probs = dist.log_prob(mb_actions).sum(dim=-1)
                 entropy = dist.entropy().sum(dim=-1).mean()
+                approx_kl = (mb_old_log_probs - new_log_probs).mean().item()
 
                 # ── Clipped Surrogate Objective ──
                 ratio = torch.exp(new_log_probs - mb_old_log_probs)
@@ -330,6 +358,13 @@ class PPOAgent:
                 total_value_loss += value_loss.item()
                 total_entropy += entropy.item()
                 n_updates += 1
+
+                if self.target_kl is not None and approx_kl > self.target_kl:
+                    stop_update = True
+                    break
+
+            if stop_update:
+                break
 
         # ── 학습률 스케줄링 ──
         self.update_count += 1

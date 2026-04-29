@@ -163,11 +163,12 @@ def evaluate(config, agent, n_episodes=10):
 if __name__ == "__main__":
     # ── 설정 ──
     config = EnvConfig(
-        grid_size=30,
+        grid_size=100,
         obstacle_mode="fixed",
+        obstacle_footprint_size=3,
         energy_budget_multiplier=3.0,
-        max_step_size=1.5,
-        wp_reach_radius=1.0,
+        max_step_size=2.2,
+        wp_reach_radius=1.8,
     )
 
     tmp_env = UAVEnv(config)
@@ -200,6 +201,8 @@ if __name__ == "__main__":
     # ── 학습 ──
     print("=== PPO Training Start ===")
     print(f"Grid: {config.grid_size}x{config.grid_size}")
+    print(f"Obstacles: {config.num_random_obstacles} "
+          f"({config.obstacle_footprint_x}x{config.obstacle_footprint_y} footprint)")
     print(f"Waypoints: {config.waypoints}")
     print(f"Energy budget: {config.compute_energy_budget():.0f}")
     print(f"Max step size: {config.max_step_size}")

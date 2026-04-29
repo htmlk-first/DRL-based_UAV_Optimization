@@ -11,6 +11,9 @@ UAV 환경 시각화 모듈 (라이트 테마, PPO용)
 - plot_comparison     : 다중 알고리즘 비교
 """
 import numpy as np
+import matplotlib
+
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import matplotlib.patheffects as pe

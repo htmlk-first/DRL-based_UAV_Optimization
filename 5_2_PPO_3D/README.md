@@ -2,139 +2,112 @@
 
 ## 개요
 
-- **PPO** 를 3차원 연속 제어 환경에 적용하여, **UAV가 3D 공간에서 건물형 장애물을 회피하며 3개의 웨이포인트를 순서대로 방문**하도록 학습합니다.
-- `4_2_DDPG_3D` 와 동일한 3D 연속 환경을 사용하지만, 정책 업데이트는 **PPO의 clipped surrogate objective** 로 수행합니다.
-- 3D 환경 특성상 **z축 이동 비용**, **건물형 장애물**, **14방향 인접 정보**, **z축 방향 반전 패널티**가 함께 반영됩니다.
+`5_2_PPO_3D`는 `4_2_DDPG_3D`와 같은 확장 3D 환경을 사용하되, 정책 업데이트는 PPO의 clipped surrogate objective와 GAE로 수행합니다. UAV는 `100 x 100 x 10` 공간에서 3D 건물 장애물을 피하면서 3개의 waypoint를 순서대로 방문해야 합니다.
 
-## 환경 (Environment)
+## 환경 설정
 
-### 상태 공간 (State)
-
-| 인덱스 | 요소 | 범위 | 설명 |
-| :---: | --- | :---: | --- |
-| 0 | `x / sx` | [0, 1] | 정규화된 x 좌표 |
-| 1 | `y / sy` | [0, 1] | 정규화된 y 좌표 |
-| 2 | `z / sz` | [0, 1] | 정규화된 z 좌표 |
-| 3 | `energy / budget` | [0, 1] | 정규화된 잔여 에너지 |
-| 4-6 | `wp_visited` | {0, 1} | 3개 웨이포인트 방문 여부 |
-| 7-20 | `adj_14dir` | {0, 1} | 6개 면 방향 + 8개 꼭짓점 대각 방향 차단 여부 |
-| 21 | `dx_wp / sx` | [-1, 1] | 다음 목표까지 x 방향 정규화 거리 |
-| 22 | `dy_wp / sy` | [-1, 1] | 다음 목표까지 y 방향 정규화 거리 |
-| 23 | `dz_wp / sz` | [-1, 1] | 다음 목표까지 z 방향 정규화 거리 |
-
-> 총 **24차원** 상태 벡터를 사용합니다.
-
-### 행동 공간 (Action)
-
-| 요소 | 범위 | 설명 |
-| --- | --- | --- |
-| `action[0]` | [-1, 1] | x 방향 이동 비율 |
-| `action[1]` | [-1, 1] | y 방향 이동 비율 |
-| `action[2]` | [-1, 1] | z 방향 이동 비율 |
-
-실제 이동량:
-
-```text
-dx = action[0] * 1.5
-dy = action[1] * 1.5
-dz = action[2] * 1.0
-```
-
-### 환경 설정
-
-| 항목 | 설정값 |
+| 항목 | 값 |
 | --- | --- |
-| 공간 크기 | 30 x 30 x 5 |
-| 행동 공간 | 연속 3차원 `Box(-1, 1, shape=(3,))` |
+| 공간 크기 | `100 x 100 x 10` |
 | 시작 위치 | `(0.5, 0.5, 0.5)` |
-| 웨이포인트 | 3개 (`(10.5,10.5,2.5)`, `(20.5,20.5,2.5)`, `(29.5,29.5,4.5)`), **순서대로 방문** |
-| 장애물 | 건물형 장애물 `40`개 |
-| 최대 이동량 | XY `1.5`, Z `1.0` |
-| 웨이포인트 도달 반경 | `1.0` |
-| z축 비용 가중치 | `1.5` |
-| 에너지 예산 | 3D 경로 비용 x `4.0` |
-| 최대 스텝 | `300` |
+| Waypoints | `(33.5, 33.5, 5.5)`, `(66.5, 66.5, 5.5)`, `(99.5, 99.5, 9.5)` |
+| 장애물 | `3 x 3` footprint 건물 `50`개 |
+| 건물 높이 | `1`부터 `grid_size_z - 1`까지 |
+| 최대 이동량 | XY `2.2`, Z `1.0` |
+| Waypoint 도달 반경 | `2.0` |
+| Z축 이동 비용 가중치 | `1.7` |
+| 에너지 예산 | waypoint 기준 경로 비용 x `3.6` |
+| 최대 step | `1500` |
 
-### 보상 체계 (Reward)
+장애물은 `env/config.py`에서 footprint-aware 방식으로 생성됩니다. 각 건물은 `x0`, `y0`, `size_x`, `size_y`, `height` 메타데이터를 가지며, 실제 충돌 판정은 해당 footprint와 높이에 포함되는 모든 3D cell을 사용합니다.
 
-| 이벤트 | 보상 | 설명 |
-| --- | --- | --- |
-| 이동 (매 스텝) | **-0.5** | 짧은 경로 유도 |
-| 웨이포인트 도달 | +100.0 | 목표 방문 유도 |
-| 전체 임무 완료 | +300.0 | 모든 목표 방문 완료 |
-| 벽 충돌 | -5.0 | 공간 이탈 방지 |
-| 장애물 충돌 | -10.0 | 건물 회피 유도 |
-| z축 방향 반전 | -1.0 | 고도 지그재그 억제 |
-| 에너지 소진 | -50.0 | 에너지 효율 학습 |
-| Reward Shaping | `γ·Φ(s') - Φ(s)` | 목표 접근 시 추가 보상 |
+## 상태와 행동
 
-> 포텐셜 함수는 다음 목표까지의 **3D 유클리드 거리의 음수**입니다.
+상태 벡터는 총 `24`차원입니다.
 
-## 알고리즘
+| 구간 | 의미 |
+| --- | --- |
+| `0-2` | 정규화된 UAV 위치 `(x, y, z)` |
+| `3` | 정규화된 잔여 에너지 |
+| `4-6` | waypoint 방문 여부 |
+| `7-20` | 14방향 인접 장애물/경계 감지 |
+| `21-23` | 다음 waypoint까지의 정규화된 3D 방향 |
 
-### PPO (Proximal Policy Optimization)
-
-- **On-policy rollout 학습**을 수행합니다.
-- **Gaussian policy** 로 연속 행동을 샘플링합니다.
-- **GAE** 로 advantage 를 추정하고, **clipping** 으로 정책 업데이트 폭을 제한합니다.
-- **Entropy bonus** 와 **learning rate decay** 를 사용해 탐색과 안정성을 함께 확보합니다.
-
-### 네트워크 구조
+행동 공간은 연속 3차원 `Box(-1, 1, shape=(3,))`입니다.
 
 ```text
-Actor : Input (24) -> Linear(256) -> ReLU -> Linear(256) -> ReLU -> Gaussian policy
-Critic: Input (24) -> Linear(256) -> ReLU -> Linear(256) -> ReLU -> V(s)
+dx = action[0] * max_step_size
+dy = action[1] * max_step_size
+dz = action[2] * max_step_size_z
 ```
 
-### 학습 하이퍼파라미터
+## 보상
+
+| 이벤트 | 값 |
+| --- | --- |
+| 매 step | `-0.5` |
+| waypoint 도달 | `+100.0` |
+| 전체 mission 완료 | `+300.0` |
+| 벽 충돌 | `-5.0` |
+| 장애물 충돌 | `-10.0` |
+| Z축 방향 반전 | `-1.0` |
+| 에너지 소진 | `-50.0` |
+| potential shaping | `gamma * Phi(s') - Phi(s)`, `gamma=0.99` |
+
+Z축 방향 반전 페널티는 큰 3D 공간에서 불필요한 고도 지그재그를 줄이기 위한 PPO 전용 shaping 항목입니다.
+
+## PPO 튜닝값
+
+환경이 `4_2_DDPG_3D` 기준의 큰 공간으로 확장되어, 기본 PPO 설정도 작은 3D 환경보다 긴 탐색과 큰 rollout을 견디도록 조정했습니다.
 
 | 파라미터 | 값 |
 | --- | --- |
-| 학습률 | `3e-4` |
-| 할인율 `γ` | `0.99` |
-| `gae_lambda` | `0.95` |
-| `clip_epsilon` | `0.2` |
-| `entropy_coeff` | `0.01` |
-| `value_coeff` | `0.25` |
-| `max_grad_norm` | `0.5` |
-| `k_epochs` | `10` |
-| mini-batch 크기 | `64` |
-| Hidden 차원 | `256` |
-| 학습 에피소드 수 | `10000` |
+| 학습 episode | `6000` |
+| Learning rate | `1.5e-4` |
+| Gamma | `0.99` |
+| GAE lambda | `0.93` |
+| Clip epsilon | `0.12` |
+| Entropy coeff | `0.004` |
+| Value coeff | `0.5` |
+| Max grad norm | `0.35` |
+| PPO epochs/update | `4` |
+| Mini-batch size | `256` |
+| Hidden dim | `256` |
+| LR decay | enabled, floor `1e-5` |
+| Target KL | `0.025` |
+| Actor log_std clamp | `[-3.0, -0.8]` |
 
-## 실행 방법
+`training_log.csv`에서 1000 episode 전후 success가 90%대까지 올라간 뒤 entropy가 2.0 이상으로 커지면서 policy가 무너지는 패턴이 확인되어, 새 기본값은 탐색 보너스와 PPO update 폭을 낮추는 쪽으로 조정했습니다. 학습 중 가장 좋은 100-episode rolling success checkpoint는 `ppo_3d_best_model.pt`로 별도 저장됩니다.
 
-```bash
-cd 5_2_PPO_3D
-python train.py
+## 실행
+
+PowerShell에서 repo root 기준:
+
+```powershell
+cd .\5_2_PPO_3D
+..\venv\Scripts\python.exe .\train.py
 ```
 
-## 실험 결과
+저장된 모델과 로그를 다시 평가/시각화할 때:
 
-### 학습 곡선
+```powershell
+cd .\5_2_PPO_3D
+..\venv\Scripts\python.exe .\test.py
+```
 
-![Training Curve](results/training_curve.png)
+## 결과 파일
 
-### 성공률
+학습과 평가 결과는 `results/` 아래에 저장됩니다.
 
-![Success Rate](results/success_curve.png)
-
-### Policy 손실
-
-![Policy Loss](results/policy_loss.png)
-
-### Value 손실
-
-![Value Loss](results/value_loss.png)
-
-### 엔트로피 추이
-
-![Entropy](results/entropy.png)
-
-### 최적 경로
-
-![Best Path 3D](results/best_path_3d.png)
-
-### 비행 경로 애니메이션
-
-![Flight GIF](results/flight_3d.gif)
+| 파일 | 내용 |
+| --- | --- |
+| `ppo_3d_model.pt` | PPO 3D 모델 |
+| `ppo_3d_best_model.pt` | 100-episode rolling success 기준 best checkpoint |
+| `training_log.csv` | episode별 reward, success, loss, entropy, learning rate |
+| `training_curve.png` | reward 곡선 |
+| `success_curve.png` | success rate 곡선 |
+| `policy_loss.png` | policy loss |
+| `value_loss.png` | value loss |
+| `entropy.png` | entropy |
+| `best_path_3d.png` | 최종/최고 경로 3D plot |
+| `flight_3d.gif` | 비행 경로 애니메이션 |

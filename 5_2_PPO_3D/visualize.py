@@ -10,6 +10,9 @@ UAV 3D 환경 시각화 모듈 (라이트 테마, PPO 3D용)
 - plot_comparison      : 다중 알고리즘 비교
 """
 import numpy as np
+import matplotlib
+
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import matplotlib.patheffects as pe
@@ -38,6 +41,10 @@ MUTED_CLR      = "#57606a"
 ACCENT_YELLOW  = "#9a6700"
 
 MARKER_EDGE    = "#555555"
+
+# Fallback for legacy building metadata. New environments provide size_x/size_y
+# so rendered footprint matches actual obstacle cells.
+BUILDING_FOOTPRINT_SIZE = 1.0
 
 
 def _h2rgb(hex_color: str):
@@ -90,15 +97,21 @@ def _cum_distances_3d(path):
     return dists
 
 
-def _draw_building(ax, x, y, height, color, alpha=0.3):
-    s = 0.4
+def _draw_building(ax, x, y, height, color, alpha=0.3,
+                   footprint_x=None, footprint_y=None):
+    if footprint_x is None:
+        footprint_x = BUILDING_FOOTPRINT_SIZE
+    if footprint_y is None:
+        footprint_y = footprint_x
+    sx = footprint_x / 2
+    sy = footprint_y / 2
     z_lo = -0.4
     z_hi = height - 0.6
     if z_hi <= z_lo:
         z_hi = z_lo + 0.2
     verts = np.array([
-        [x-s, y-s, z_lo], [x+s, y-s, z_lo], [x+s, y+s, z_lo], [x-s, y+s, z_lo],
-        [x-s, y-s, z_hi], [x+s, y-s, z_hi], [x+s, y+s, z_hi], [x-s, y+s, z_hi],
+        [x-sx, y-sy, z_lo], [x+sx, y-sy, z_lo], [x+sx, y+sy, z_lo], [x-sx, y+sy, z_lo],
+        [x-sx, y-sy, z_hi], [x+sx, y-sy, z_hi], [x+sx, y+sy, z_hi], [x-sx, y+sy, z_hi],
     ])
     faces = [
         [verts[0], verts[1], verts[2], verts[3]],
@@ -136,14 +149,35 @@ def _draw_cube(ax, x, y, z, color, alpha=0.3, size=0.8):
         edgecolor=(*color, 0.5), linewidth=0.3))
 
 
+def _building_meta(center, data):
+    cx, cy = center
+    if isinstance(data, dict):
+        height = int(data.get("height", 1))
+        size_x = int(data.get("size_x", data.get("footprint_x", 1)))
+        size_y = int(data.get("size_y", data.get("footprint_y", size_x)))
+        x0 = int(data.get("x0", round(cx - (size_x - 1) / 2.0)))
+        y0 = int(data.get("y0", round(cy - (size_y - 1) / 2.0)))
+    else:
+        height = int(data)
+        size_x = int(round(BUILDING_FOOTPRINT_SIZE))
+        size_y = size_x
+        x0 = int(round(cx - (size_x - 1) / 2.0))
+        y0 = int(round(cy - (size_y - 1) / 2.0))
+    return height, size_x, size_y, x0, y0
+
+
 def _draw_obstacle_cubes(ax, obstacles, alpha=0.25, buildings=None):
     obs_rgb = _h2rgb(OBS_COLOR)
     if buildings:
         drawn = set()
-        for (bx, by), h in buildings.items():
-            _draw_building(ax, bx, by, h, color=obs_rgb, alpha=alpha)
-            for bz in range(h):
-                drawn.add((bx, by, bz))
+        for (bx, by), data in buildings.items():
+            h, size_x, size_y, x0, y0 = _building_meta((bx, by), data)
+            _draw_building(ax, bx, by, h, color=obs_rgb, alpha=alpha,
+                           footprint_x=size_x, footprint_y=size_y)
+            for ix in range(x0, x0 + size_x):
+                for iy in range(y0, y0 + size_y):
+                    for bz in range(h):
+                        drawn.add((ix, iy, bz))
         for ox, oy, oz in obstacles:
             if (ox, oy, oz) not in drawn:
                 _draw_cube(ax, ox, oy, oz, color=obs_rgb, alpha=alpha)

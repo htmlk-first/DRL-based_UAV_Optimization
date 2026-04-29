@@ -86,11 +86,12 @@ def evaluate(config, agent, n_episodes=10):
 
 if __name__ == "__main__":
     config = EnvConfig(
-        grid_size=30,
+        grid_size=100,
         obstacle_mode="fixed",
+        obstacle_footprint_size=3,
         energy_budget_multiplier=3.0,
-        max_step_size=1.5,
-        wp_reach_radius=1.0,
+        max_step_size=2.2,
+        wp_reach_radius=1.8,
     )
 
     tmp_env = UAVEnv(config)

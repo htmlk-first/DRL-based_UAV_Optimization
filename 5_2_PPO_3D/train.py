@@ -21,13 +21,23 @@ from visualize import (plot_reward_curve, plot_path_3d,
 from ppo_agent import PPOAgent
 
 
-def train(config, agent, n_episodes=4000, print_every=500, log_path=None):
+def train(
+    config,
+    agent,
+    n_episodes=6000,
+    print_every=500,
+    log_path=None,
+    best_model_path=None,
+    save_best_window=100,
+):
     env = UAVEnv3D(config)
     rewards_history = []
     success_history = []
     policy_losses = []
     value_losses = []
     entropies = []
+    best_window_success = -1.0
+    best_window_reward = -float("inf")
 
     csv_file = None
     csv_writer = None
@@ -68,6 +78,21 @@ def train(config, agent, n_episodes=4000, print_every=500, log_path=None):
         success = 1 if info["event"] == "mission_complete" else 0
         rewards_history.append(total_reward)
         success_history.append(success)
+
+        if best_model_path is not None and len(success_history) >= save_best_window:
+            window_success = np.mean(success_history[-save_best_window:])
+            window_reward = np.mean(rewards_history[-save_best_window:])
+            is_better = (
+                window_success > best_window_success
+                or (window_success == best_window_success
+                    and window_reward > best_window_reward)
+            )
+            if is_better:
+                os.makedirs(os.path.dirname(os.path.abspath(best_model_path)),
+                            exist_ok=True)
+                agent.save(best_model_path)
+                best_window_success = window_success
+                best_window_reward = window_reward
 
         if csv_writer is not None:
             p_loss_val = float(p_loss) if p_loss is not None else float("nan")
@@ -162,48 +187,59 @@ def evaluate(config, agent, n_episodes=10):
 if __name__ == "__main__":
     # ── 설정 ──
     config = EnvConfig3D(
-        grid_size_x=30,
-        grid_size_y=30,
-        grid_size_z=5,
+        grid_size_x=100,
+        grid_size_y=100,
+        grid_size_z=10,
         obstacle_mode="fixed",
-        num_buildings=40,
-        energy_budget_multiplier=4.0,
-        max_step_size=1.5,
+        building_footprint_size=3,
+        num_buildings=50,
+        energy_budget_multiplier=3.6,
+        max_step_size=2.2,
         max_step_size_z=1.0,
-        wp_reach_radius=1.0,
-        z_cost_multiplier=1.5,
+        wp_reach_radius=2.0,
+        z_cost_multiplier=1.7,
+        penalty_z_reversal=-1.0,
+        max_steps=1500,
     )
 
     tmp_env = UAVEnv3D(config)
     obs_dim = tmp_env.observation_space.shape[0]
     act_dim = tmp_env.action_space.shape[0]
 
-    N_EPISODES = 10000
+    N_EPISODES = 6000
 
     agent = PPOAgent(
         state_dim=obs_dim,
         action_dim=act_dim,
-        lr=3e-4,
+        lr=1.5e-4,
         gamma=0.99,
-        gae_lambda=0.95,
-        clip_epsilon=0.2,
-        entropy_coeff=0.01,
-        value_coeff=0.25,
-        max_grad_norm=0.5,
-        k_epochs=10,
-        mini_batch_size=64,
+        gae_lambda=0.93,
+        clip_epsilon=0.12,
+        entropy_coeff=0.004,
+        value_coeff=0.5,
+        max_grad_norm=0.35,
+        k_epochs=4,
+        mini_batch_size=256,
         hidden_dim=256,
         lr_decay=True,
         total_updates=N_EPISODES,
+        target_kl=0.025,
+        initial_log_std=-1.0,
+        log_std_min=-3.0,
+        log_std_max=-0.8,
     )
 
     # ── 저장 경로 ──
     save_dir = os.path.join(os.path.dirname(__file__), "results")
     os.makedirs(save_dir, exist_ok=True)
+    final_model_path = os.path.join(save_dir, "ppo_3d_model.pt")
+    best_model_path = os.path.join(save_dir, "ppo_3d_best_model.pt")
 
     # ── 학습 ──
     print("=== PPO 3D Training Start ===")
     print(f"Grid: {config.grid_size_x}x{config.grid_size_y}x{config.grid_size_z}")
+    print(f"Buildings: {config.num_buildings} "
+          f"({config.building_footprint_x}x{config.building_footprint_y} footprint)")
     print(f"Waypoints: {config.waypoints}")
     print(f"Energy budget: {config.compute_energy_budget():.0f}")
     print(f"Max step size (XY): {config.max_step_size}, (Z): {config.max_step_size_z}")
@@ -215,14 +251,21 @@ if __name__ == "__main__":
           f"Mini-batch: {agent.mini_batch_size}")
     print(f"GAE λ: {agent.gae_lambda}, Clip ε: {agent.clip_epsilon}, "
           f"Entropy coeff: {agent.entropy_coeff}")
+    print(f"Target KL: {agent.target_kl}, "
+          f"log_std clamp: [{agent.network.log_std_min}, {agent.network.log_std_max}]")
 
     rewards, successes, p_losses, v_losses, ents = train(
         config, agent, n_episodes=N_EPISODES, print_every=500,
         log_path=os.path.join(save_dir, "training_log.csv"),
+        best_model_path=best_model_path,
+        save_best_window=100,
     )
 
     # ── 모델 저장 ──
-    agent.save(os.path.join(save_dir, "ppo_3d_model.pt"))
+    agent.save(final_model_path)
+    if os.path.exists(best_model_path):
+        print(f"Loading best rolling-success checkpoint for evaluation: {best_model_path}")
+        agent.load(best_model_path)
 
     # ── 학습 곡선 ──
     plot_reward_curve(rewards, window=50, title="PPO 3D Training Curve",
