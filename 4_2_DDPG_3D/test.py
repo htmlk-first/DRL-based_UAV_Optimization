@@ -1,8 +1,14 @@
 """DDPG 3D Test: loads saved model, regenerates result PNGs (no training)."""
-import os, sys, csv
+import os, sys
 import numpy as np
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from common.experiment import (ExperimentPaths, optional_float,
+                               print_eval_summary, read_training_log,
+                               success_from_info)
 from env.config import EnvConfig3D
 from env.uav_env import UAVEnv3D
 from visualize import (plot_reward_curve, plot_path_3d,
@@ -10,21 +16,20 @@ from visualize import (plot_reward_curve, plot_path_3d,
                        plot_success_curve, make_flight_gif_3d)
 from ddpg_agent import DDPGAgent
 
-RESULTS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results")
+RESULTS = str(ExperimentPaths.from_file(__file__).results_dir)
 
 
 def load_log():
     rewards, successes, critic_losses, actor_losses = [], [], [], []
-    with open(os.path.join(RESULTS, "training_log.csv"), newline="", encoding="utf-8") as f:
-        for row in csv.DictReader(f):
-            rewards.append(float(row["reward"]))
-            successes.append(int(row["success"]))
-            cl = row["ep_avg_critic_loss"]
-            al = row["ep_avg_actor_loss"]
-            if cl and cl.lower() != "nan":
-                critic_losses.append(float(cl))
-            if al and al.lower() != "nan":
-                actor_losses.append(float(al))
+    for row in read_training_log(RESULTS):
+        rewards.append(float(row["reward"]))
+        successes.append(int(row["success"]))
+        cl = optional_float(row, "ep_avg_critic_loss")
+        al = optional_float(row, "ep_avg_actor_loss")
+        if cl is not None:
+            critic_losses.append(cl)
+        if al is not None:
+            actor_losses.append(al)
     return rewards, successes, critic_losses, actor_losses
 
 
@@ -47,15 +52,13 @@ def evaluate(config, agent, n_episodes=10):
             ep_reward += reward
 
         total_rewards.append(ep_reward)
-        if info.get("event") == "mission_complete":
-            successes += 1
+        successes += success_from_info(info)
         if ep_reward > best_reward:
             best_reward = ep_reward
             best_env = env
 
-    print(f"\n=== Evaluation ({n_episodes} episodes) ===")
-    print(f"Avg Reward : {np.mean(total_rewards):.1f}")
-    print(f"Success    : {successes}/{n_episodes} ({successes/n_episodes*100:.0f}%)")
+    print_eval_summary(total_rewards, successes, n_episodes,
+                       reward_label="Avg Reward ", success_label="Success   ")
     if best_env:
         best_env.render()
         print(f"Path length: {len(best_env.path)}")

@@ -10,7 +10,12 @@ import copy
 import numpy as np
 import torch
 
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
+
 sys.path.insert(0, os.path.dirname(__file__))
+from common.experiment import ExperimentPaths, success_from_info
 from env import UAVEnv, EnvConfig
 from sac_agent import SACAgent
 
@@ -71,7 +76,7 @@ def train(agent, env, num_episodes, update_after=5000, update_every=1,
                 agent.update()
 
         reward_history.append(ep_reward)
-        success = 1 if info.get("event") == "mission_complete" else 0
+        success = success_from_info(info)
         success_history.append(success)
 
         if best_model_path is not None and len(success_history) >= save_best_window:
@@ -133,8 +138,7 @@ def evaluate(agent, base_config, num_eval=10):
             done = terminated or truncated
             ep_reward += reward
 
-        if info.get("event") == "mission_complete":
-            successes += 1
+        successes += success_from_info(info)
 
         if ep_reward > best_reward:
             best_reward = ep_reward
@@ -216,8 +220,8 @@ if __name__ == "__main__":
     )
 
     # ── 저장 경로 ──
-    save_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results")
-    os.makedirs(save_dir, exist_ok=True)
+    paths = ExperimentPaths.from_file(__file__)
+    save_dir = str(paths.results_dir)
     final_model_path = os.path.join(save_dir, "sac_model.pt")
     best_model_path = os.path.join(save_dir, "sac_best_model.pt")
 

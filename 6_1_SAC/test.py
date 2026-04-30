@@ -1,31 +1,36 @@
 """SAC Test: loads saved model, regenerates result PNGs (no training)."""
-import os, sys, csv, copy
+import os, sys, copy
 import numpy as np
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from common.experiment import (ExperimentPaths, optional_float,
+                               print_eval_summary, read_training_log,
+                               select_existing_result, success_from_info)
 from env import UAVEnv, EnvConfig
 from visualize import (plot_reward_curve, plot_success_curve,
                        plot_actor_loss, plot_critic_loss, plot_alpha_curve,
                        plot_path, make_flight_gif)
 from sac_agent import SACAgent
 
-RESULTS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results")
+RESULTS = str(ExperimentPaths.from_file(__file__).results_dir)
 
 
 def load_log():
     rewards, successes = [], []
     actor_losses, critic_losses, alphas = [], [], []
-    with open(os.path.join(RESULTS, "training_log.csv"), newline="", encoding="utf-8") as f:
-        for row in csv.DictReader(f):
-            rewards.append(float(row["reward"]))
-            successes.append(int(row["success"]))
-            alphas.append(float(row["alpha"]))
-            al = row["ep_avg_actor_loss"]
-            cl = row["ep_avg_critic_loss"]
-            if al and al.lower() != "nan":
-                actor_losses.append(float(al))
-            if cl and cl.lower() != "nan":
-                critic_losses.append(float(cl))
+    for row in read_training_log(RESULTS):
+        rewards.append(float(row["reward"]))
+        successes.append(int(row["success"]))
+        alphas.append(float(row["alpha"]))
+        al = optional_float(row, "ep_avg_actor_loss")
+        cl = optional_float(row, "ep_avg_critic_loss")
+        if al is not None:
+            actor_losses.append(al)
+        if cl is not None:
+            critic_losses.append(cl)
     return rewards, successes, actor_losses, critic_losses, alphas
 
 
@@ -47,8 +52,7 @@ def evaluate(config, agent, n_episodes=10):
             done = terminated or truncated
             ep_reward += reward
         total_rewards.append(ep_reward)
-        if info.get("event") == "mission_complete":
-            successes += 1
+        successes += success_from_info(info)
         if ep_reward > best_reward:
             best_reward = ep_reward
             best_path = list(env.path)
@@ -73,9 +77,8 @@ def evaluate(config, agent, n_episodes=10):
                 best_path = list(env.path)
                 best_env = copy.deepcopy(env)
 
-    print(f"\n=== Evaluation ({n_episodes} episodes) ===")
-    print(f"Avg Reward : {np.mean(total_rewards):.1f}")
-    print(f"Success    : {successes}/{n_episodes} ({successes/n_episodes*100:.0f}%)")
+    print_eval_summary(total_rewards, successes, n_episodes,
+                       reward_label="Avg Reward ", success_label="Success   ")
     if best_path:
         print(f"Path length: {len(best_path)}")
     return best_path, best_env
@@ -104,9 +107,7 @@ if __name__ == "__main__":
         initial_alpha=0.2,
         grad_clip=1.0,
     )
-    model_path = os.path.join(RESULTS, "sac_best_model.pt")
-    if not os.path.exists(model_path):
-        model_path = os.path.join(RESULTS, "sac_model.pt")
+    model_path = select_existing_result(RESULTS, "sac_best_model.pt", "sac_model.pt")
     print(f"Loading model: {model_path}")
     agent.load(model_path)
 

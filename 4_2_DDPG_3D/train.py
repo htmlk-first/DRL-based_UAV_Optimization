@@ -9,9 +9,15 @@ DDPG 3D 학습 및 평가 스크립트
   - 유클리드 거리 기반 에너지 + z축 추가 비용
 """
 import os
+import sys
 import csv
 import numpy as np
 
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
+
+from common.experiment import ExperimentPaths, print_eval_summary, success_from_info
 from env.config import EnvConfig3D
 from env.uav_env import UAVEnv3D
 from visualize import (plot_reward_curve, plot_path_3d,
@@ -62,7 +68,7 @@ def train(config, agent, n_episodes=6000, print_every=500, log_path=None):
             total_reward += reward
 
         agent.decay_noise()
-        success = 1 if info["event"] == "mission_complete" else 0
+        success = success_from_info(info)
         rewards_history.append(total_reward)
         success_history.append(success)
 
@@ -107,12 +113,9 @@ def evaluate(config, agent, n_episodes=10):
             total_reward += reward
 
         total_rewards.append(total_reward)
-        if info["event"] == "mission_complete":
-            successes += 1
+        successes += success_from_info(info)
 
-    print(f"\n=== Evaluation ({n_episodes} episodes) ===")
-    print(f"Avg Reward: {np.mean(total_rewards):.1f}")
-    print(f"Success Rate: {successes}/{n_episodes} ({successes/n_episodes*100:.0f}%)")
+    print_eval_summary(total_rewards, successes, n_episodes)
 
     env.render()
     print(f"Path length: {len(env.path)}")
@@ -157,8 +160,8 @@ if __name__ == "__main__":
     )
 
     # ── 저장 경로 ──
-    save_dir = os.path.join(os.path.dirname(__file__), "results")
-    os.makedirs(save_dir, exist_ok=True)
+    paths = ExperimentPaths.from_file(__file__)
+    save_dir = str(paths.results_dir)
 
     # ── 학습 ──
     print("=== DDPG 3D Training Start ===")

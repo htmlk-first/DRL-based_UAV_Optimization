@@ -2,8 +2,14 @@
 TQL 학습 및 평가 스크립트
 """
 import os
+import sys
 import numpy as np
 
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
+
+from common.experiment import ExperimentPaths, print_eval_summary, success_from_info
 from env.config import EnvConfig
 from env.uav_env import UAVEnv
 from visualize import (plot_reward_curve, plot_path,
@@ -34,7 +40,7 @@ def train(config, agent, n_episodes=5000, print_every=500):
 
         agent.decay_epsilon()
         rewards_history.append(total_reward)
-        success_history.append(1 if info["event"] == "mission_complete" else 0)
+        success_history.append(success_from_info(info))
 
         if ep % print_every == 0:
             avg_r = np.mean(rewards_history[-print_every:])
@@ -68,12 +74,9 @@ def evaluate(config, agent, n_episodes=10, render_last=True):
             total_reward += reward
 
         total_rewards.append(total_reward)
-        if info["event"] == "mission_complete":
-            successes += 1
+        successes += success_from_info(info)
 
-    print(f"\n=== Evaluation ({n_episodes} episodes) ===")
-    print(f"Avg Reward: {np.mean(total_rewards):.1f}")
-    print(f"Success Rate: {successes}/{n_episodes} ({successes/n_episodes*100:.0f}%)")
+    print_eval_summary(total_rewards, successes, n_episodes)
 
     if render_last:
         env.render()
@@ -104,8 +107,8 @@ if __name__ == "__main__":
     rewards, successes = train(config, agent, n_episodes=5000, print_every=500)
 
     # ── 저장 ──
-    save_dir = os.path.join(os.path.dirname(__file__), "results")
-    os.makedirs(save_dir, exist_ok=True)
+    paths = ExperimentPaths.from_file(__file__)
+    save_dir = str(paths.results_dir)
     agent.save(os.path.join(save_dir, "tql_model.pkl"))
 
     # ── 학습 곡선 ──

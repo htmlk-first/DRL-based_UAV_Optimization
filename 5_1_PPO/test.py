@@ -1,8 +1,14 @@
 """PPO Test: loads saved model, regenerates result PNGs (no training)."""
-import os, sys, csv
+import os, sys
 import numpy as np
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from common.experiment import (ExperimentPaths, optional_float,
+                               print_eval_summary, read_training_log,
+                               success_from_info)
 from env.config import EnvConfig
 from env.uav_env import UAVEnv
 from visualize import (plot_reward_curve, plot_path,
@@ -11,22 +17,21 @@ from visualize import (plot_reward_curve, plot_path,
                        plot_success_curve, make_flight_gif)
 from ppo_agent import PPOAgent
 
-RESULTS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results")
+RESULTS = str(ExperimentPaths.from_file(__file__).results_dir)
 
 
 def load_log():
     rewards, successes = [], []
     policy_losses, value_losses, entropies = [], [], []
-    with open(os.path.join(RESULTS, "training_log.csv"), newline="", encoding="utf-8") as f:
-        for row in csv.DictReader(f):
-            rewards.append(float(row["reward"]))
-            successes.append(int(row["success"]))
-            for src, dst in [("policy_loss", policy_losses),
-                              ("value_loss",  value_losses),
-                              ("entropy",     entropies)]:
-                v = row[src]
-                if v and v.lower() != "nan":
-                    dst.append(float(v))
+    for row in read_training_log(RESULTS):
+        rewards.append(float(row["reward"]))
+        successes.append(int(row["success"]))
+        for src, dst in [("policy_loss", policy_losses),
+                         ("value_loss", value_losses),
+                         ("entropy", entropies)]:
+            v = optional_float(row, src)
+            if v is not None:
+                dst.append(v)
     return rewards, successes, policy_losses, value_losses, entropies
 
 
@@ -48,8 +53,7 @@ def evaluate(config, agent, n_episodes=10):
             done = terminated or truncated
             ep_reward += reward
         total_rewards.append(ep_reward)
-        if info.get("event") == "mission_complete":
-            successes += 1
+        successes += success_from_info(info)
         if ep_reward > best_reward:
             best_reward = ep_reward
             best_env = env
@@ -69,15 +73,13 @@ def evaluate(config, agent, n_episodes=10):
                 done = terminated or truncated
                 ep_reward += reward
             total_rewards.append(ep_reward)
-            if info.get("event") == "mission_complete":
-                successes += 1
+            successes += success_from_info(info)
             if ep_reward > best_reward:
                 best_reward = ep_reward
                 best_env = env
 
-    print(f"\n=== Evaluation ({n_episodes} episodes) ===")
-    print(f"Avg Reward : {np.mean(total_rewards):.1f}")
-    print(f"Success    : {successes}/{n_episodes} ({successes/n_episodes*100:.0f}%)")
+    print_eval_summary(total_rewards, successes, n_episodes,
+                       reward_label="Avg Reward ", success_label="Success   ")
     if best_env:
         best_env.render()
         print(f"Path length: {len(best_env.path)}")
