@@ -82,7 +82,14 @@ def evaluate(config, agent, n_episodes=10):
 
 
 if __name__ == "__main__":
-    config = EnvConfig()
+    config = EnvConfig(
+        grid_size=100,
+        obstacle_mode="fixed",
+        obstacle_footprint_size=3,
+        energy_budget_multiplier=3.0,
+        max_step_size=2.2,
+        wp_reach_radius=1.8,
+    )
 
     env = UAVEnv(config=config)
     state_dim = env.observation_space.shape[0]
@@ -91,12 +98,17 @@ if __name__ == "__main__":
     agent = SACAgent(
         state_dim=state_dim, action_dim=action_dim,
         hidden_dim=256,
-        lr_actor=3e-4, lr_critic=3e-4, lr_alpha=3e-4,
-        gamma=0.99, tau=0.005,
-        buffer_capacity=200000, batch_size=256,
+        lr_actor=2e-4, lr_critic=3e-4, lr_alpha=1e-4,
+        gamma=0.995, tau=0.005,
+        buffer_capacity=500000, batch_size=256,
         initial_alpha=0.2,
+        grad_clip=1.0,
     )
-    agent.load(os.path.join(RESULTS, "sac_model.pt"))
+    model_path = os.path.join(RESULTS, "sac_best_model.pt")
+    if not os.path.exists(model_path):
+        model_path = os.path.join(RESULTS, "sac_model.pt")
+    print(f"Loading model: {model_path}")
+    agent.load(model_path)
 
     # ── Training history plots ──
     rewards, successes, a_losses, c_losses, alphas = load_log()

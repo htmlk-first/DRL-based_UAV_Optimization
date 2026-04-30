@@ -1,40 +1,52 @@
-"""
-UAV Environment Configuration (SAC용)
-- 5_1_PPO와 동일한 환경 설정 유지
-- 30×30 공간, 3개 웨이포인트, 연속 좌표 이동
-"""
 import numpy as np
 
 
 class EnvConfig:
     def __init__(self, **kwargs):
-        # ── Grid ──
-        self.grid_size = kwargs.get("grid_size", 30)
-
-        # ── UAV Start Position (셀 중심) ──
+        self.grid_size = kwargs.get("grid_size", 100)
         self.start_pos = kwargs.get("start_pos", (0.5, 0.5))
 
-        # ── Waypoints (3개, 셀 중심 좌표) ──
         default_wp = self._default_waypoints(self.grid_size)
         self.waypoints = kwargs.get("waypoints", default_wp)
 
-        # ── Continuous Action ──
-        self.max_step_size = kwargs.get("max_step_size", 1.5)
-        self.wp_reach_radius = kwargs.get("wp_reach_radius", 1.0)
+        self.max_step_size = kwargs.get("max_step_size", 2.2)
+        self.wp_reach_radius = kwargs.get("wp_reach_radius", 1.8)
 
-        # ── Obstacles ──
         self.obstacle_mode = kwargs.get("obstacle_mode", "fixed")
         self.fixed_obstacles = kwargs.get("fixed_obstacles", None)
-        self.num_random_obstacles = kwargs.get("num_random_obstacles", 15)
+
+        self.obstacle_footprint_x = int(kwargs.get(
+            "obstacle_footprint_x",
+            kwargs.get("obstacle_footprint_size", 3),
+        ))
+        self.obstacle_footprint_y = int(kwargs.get(
+            "obstacle_footprint_y",
+            kwargs.get("obstacle_footprint_size", 3),
+        ))
+        self.obstacle_footprint_x = max(1, self.obstacle_footprint_x)
+        self.obstacle_footprint_y = max(1, self.obstacle_footprint_y)
+        self.obstacle_ground_coverage = kwargs.get("obstacle_ground_coverage", 0.10)
+
+        footprint_area = self.obstacle_footprint_x * self.obstacle_footprint_y
+        default_num_obstacles = max(
+            1,
+            int(round(
+                self.grid_size * self.grid_size
+                * self.obstacle_ground_coverage / footprint_area
+            )),
+        )
+        self.num_random_obstacles = kwargs.get(
+            "num_random_obstacles",
+            default_num_obstacles,
+        )
         self.random_seed = kwargs.get("random_seed", 42)
+        self._obstacle_blocks = {}
 
         if self.fixed_obstacles is None:
             self.fixed_obstacles = self._default_obstacles(self.grid_size)
 
-        # ── Energy ──
         self.energy_budget_multiplier = kwargs.get("energy_budget_multiplier", 3.0)
 
-        # ── Rewards ──
         self.reward_waypoint = kwargs.get("reward_waypoint", 100.0)
         self.reward_all_done = kwargs.get("reward_all_done", 300.0)
         self.penalty_wall = kwargs.get("penalty_wall", -5.0)
@@ -42,16 +54,10 @@ class EnvConfig:
         self.penalty_step = kwargs.get("penalty_step", -0.5)
         self.penalty_energy_out = kwargs.get("penalty_energy_out", -50.0)
 
-        # ── Reward Shaping ──
         self.gamma_shaping = kwargs.get("gamma_shaping", 0.99)
-
-        # ── Max Steps ──
-        self.max_steps = kwargs.get("max_steps", self.grid_size * 10)
-
-    # ── helpers ──
+        self.max_steps = kwargs.get("max_steps", self.grid_size * 12)
 
     def _default_waypoints(self, size):
-        """3개 웨이포인트: 1/3 지점, 2/3 지점, 끝 지점 (셀 중심)"""
         third = size // 3
         return [
             (third + 0.5, third + 0.5),
@@ -59,38 +65,71 @@ class EnvConfig:
             (size - 0.5, size - 0.5),
         ]
 
-    def _default_obstacles(self, size):
-        rng = np.random.RandomState(42)
-        n = max(10, size * size // 10)
-        obstacles = set()
-        protected = {(0, 0)}
-        for wp in self._default_waypoints(size):
+    def _protected_cells(self):
+        protected = {(int(self.start_pos[0]), int(self.start_pos[1]))}
+        for wp in self.waypoints:
             protected.add((int(wp[0]), int(wp[1])))
+        return protected
 
-        while len(obstacles) < n:
-            pos = (rng.randint(0, size), rng.randint(0, size))
-            if pos not in protected:
-                obstacles.add(pos)
-        return list(obstacles)
+    def _footprint_cells(self, x0, y0):
+        for x in range(x0, x0 + self.obstacle_footprint_x):
+            for y in range(y0, y0 + self.obstacle_footprint_y):
+                yield x, y
+
+    def _generate_obstacles(self):
+        rng = np.random.RandomState(self.random_seed)
+        protected = self._protected_cells()
+        occupied = set()
+        blocks = {}
+
+        max_x0 = self.grid_size - self.obstacle_footprint_x
+        max_y0 = self.grid_size - self.obstacle_footprint_y
+        if max_x0 < 0 or max_y0 < 0:
+            raise ValueError("obstacle footprint is larger than the grid")
+
+        max_attempts = max(1000, self.num_random_obstacles * 300)
+        attempts = 0
+        while len(blocks) < self.num_random_obstacles and attempts < max_attempts:
+            attempts += 1
+            x0 = rng.randint(0, max_x0 + 1)
+            y0 = rng.randint(0, max_y0 + 1)
+            footprint = set(self._footprint_cells(x0, y0))
+            if footprint & protected or footprint & occupied:
+                continue
+
+            cx = x0 + (self.obstacle_footprint_x - 1) / 2.0
+            cy = y0 + (self.obstacle_footprint_y - 1) / 2.0
+            blocks[(cx, cy)] = {
+                "x0": int(x0),
+                "y0": int(y0),
+                "size_x": int(self.obstacle_footprint_x),
+                "size_y": int(self.obstacle_footprint_y),
+            }
+            occupied.update(footprint)
+
+        if len(blocks) < self.num_random_obstacles:
+            raise RuntimeError(
+                "could not place all obstacles; reduce num_random_obstacles "
+                "or obstacle footprint"
+            )
+
+        self._obstacle_blocks = blocks
+        return list(occupied)
+
+    def _default_obstacles(self, size):
+        return self._generate_obstacles()
 
     def get_obstacles(self):
         if self.obstacle_mode == "fixed":
             return list(self.fixed_obstacles)
-        else:
-            rng = np.random.RandomState(self.random_seed)
-            obstacles = set()
-            protected = {(int(self.start_pos[0]), int(self.start_pos[1]))}
-            for wp in self.waypoints:
-                protected.add((int(wp[0]), int(wp[1])))
-            n = self.num_random_obstacles
-            while len(obstacles) < n:
-                pos = (rng.randint(0, self.grid_size), rng.randint(0, self.grid_size))
-                if pos not in protected:
-                    obstacles.add(pos)
-            return list(obstacles)
+        return self._generate_obstacles()
+
+    def get_obstacle_blocks(self):
+        if not self._obstacle_blocks:
+            self.get_obstacles()
+        return dict(self._obstacle_blocks)
 
     def compute_energy_budget(self):
-        """웨이포인트 간 유클리드 거리 합 × 배율"""
         points = [self.start_pos] + list(self.waypoints)
         total_dist = 0
         for i in range(len(points) - 1):

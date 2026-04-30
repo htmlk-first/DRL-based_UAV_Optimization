@@ -147,14 +147,15 @@ class SACAgent:
         state_dim,
         action_dim,
         hidden_dim=256,
-        lr_actor=3e-4,
+        lr_actor=2e-4,
         lr_critic=3e-4,
-        lr_alpha=3e-4,
-        gamma=0.99,
+        lr_alpha=1e-4,
+        gamma=0.995,
         tau=0.005,
-        buffer_capacity=100_000,
+        buffer_capacity=500_000,
         batch_size=256,
         initial_alpha=0.2,
+        grad_clip=1.0,
         device=None,
     ):
         self.device = torch.device(device) if device is not None else torch.device(
@@ -164,6 +165,7 @@ class SACAgent:
         self.tau = tau
         self.batch_size = batch_size
         self.action_dim = action_dim
+        self.grad_clip = grad_clip
 
         # ── Networks ──
         self.actor = GaussianActor(state_dim, action_dim, hidden_dim).to(self.device)
@@ -235,6 +237,8 @@ class SACAgent:
 
         self.critic_optim.zero_grad()
         critic_loss.backward()
+        if self.grad_clip is not None:
+            nn.utils.clip_grad_norm_(self.critic.parameters(), self.grad_clip)
         self.critic_optim.step()
 
         # ── 2) Actor Update ──
@@ -244,6 +248,8 @@ class SACAgent:
 
         self.actor_optim.zero_grad()
         actor_loss.backward()
+        if self.grad_clip is not None:
+            nn.utils.clip_grad_norm_(self.actor.parameters(), self.grad_clip)
         self.actor_optim.step()
 
         # ── 3) Alpha (Entropy) Update ──

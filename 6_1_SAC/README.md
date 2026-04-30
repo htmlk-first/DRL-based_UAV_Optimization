@@ -2,130 +2,107 @@
 
 ## 개요
 
-- **SAC(Soft Actor-Critic)** 를 사용하여 **2D 연속 환경에서 UAV의 확률적 정책을 오프폴리시 방식으로 학습**합니다.
-- `5_1_PPO` 와 동일한 연속 환경을 사용하지만, PPO의 on-policy 구조 대신 **Replay Buffer 기반 off-policy 학습**을 수행합니다.
-- **Twin Q-Network**, **Gaussian Policy**, **Automatic Entropy Tuning(alpha)**, **Soft Target Update** 가 핵심입니다.
-- 탐색 성능과 샘플 효율을 동시에 높이는 것이 목표입니다.
+`6_1_SAC`는 `5_1_PPO`와 같은 확장 2D 환경을 사용하되, 학습은 Soft Actor-Critic 방식으로 수행합니다. UAV는 `100 x 100` 공간에서 `3 x 3` footprint 장애물을 피하면서 3개의 waypoint를 순서대로 방문해야 합니다.
 
-## 환경 (Environment)
+SAC는 replay buffer 기반 off-policy 알고리즘이므로, 큰 map에 맞춰 buffer, warm-up, update 주기, discount, entropy 관련 학습률을 함께 조정했습니다.
 
-### 상태 공간 (State)
+## 환경 설정
 
-| 인덱스 | 요소 | 범위 | 설명 |
-| :---: | --- | :---: | --- |
-| 0 | `x / size` | [0, 1] | 정규화된 x 좌표 |
-| 1 | `y / size` | [0, 1] | 정규화된 y 좌표 |
-| 2 | `energy / budget` | [0, 1] | 정규화된 잔여 에너지 |
-| 3-5 | `wp_visited` | {0, 1} | 3개 웨이포인트 방문 여부 |
-| 6-13 | `adj_8dir` | {0, 1} | 8방향 장애물/경계 정보 |
-| 14 | `dx_wp / size` | [-1, 1] | 다음 목표 WP까지 x 방향 정규화 거리 |
-| 15 | `dy_wp / size` | [-1, 1] | 다음 목표 WP까지 y 방향 정규화 거리 |
-
-> 총 **16차원** 상태 벡터를 사용합니다.
-
-### 행동 공간 (Action)
-
-| 요소 | 범위 | 설명 |
-| --- | --- | --- |
-| `action[0]` | [-1, 1] | x 방향 이동 비율 |
-| `action[1]` | [-1, 1] | y 방향 이동 비율 |
-
-실제 이동량은 `max_step_size=1.5` 로 스케일됩니다.
-
-### 환경 설정
-
-| 항목 | 설정값 |
+| 항목 | 값 |
 | --- | --- |
-| 공간 크기 | 30 x 30 |
-| 행동 공간 | 연속 2차원 `Box(-1, 1, shape=(2,))` |
+| 공간 크기 | `100 x 100` |
 | 시작 위치 | `(0.5, 0.5)` |
-| 웨이포인트 | 3개 (`(10.5,10.5)`, `(20.5,20.5)`, `(29.5,29.5)`), **순서대로 방문** |
-| 장애물 | 기본 고정 배치 약 90개 셀 |
-| 최대 이동량 | `1.5` |
-| 웨이포인트 도달 반경 | `1.0` |
-| 에너지 예산 | 유클리드 경로 길이 x `3.0` |
-| 최대 스텝 | `300` |
+| Waypoints | `(33.5, 33.5)`, `(66.5, 66.5)`, `(99.5, 99.5)` |
+| 장애물 | `3 x 3` footprint block, ground coverage 약 `10%` |
+| 기본 장애물 block 수 | `111`개 |
+| 실제 obstacle cell 수 | 약 `999`개 |
+| 최대 이동량 | `2.2` |
+| Waypoint 도달 반경 | `1.8` |
+| 에너지 예산 | waypoint 기준 경로 길이 x `3.0` |
+| 최대 step | `1200` |
 
-### 보상 체계 (Reward)
+장애물은 `env/config.py`에서 footprint-aware 방식으로 생성됩니다. 각 장애물 block은 `x0`, `y0`, `size_x`, `size_y` 메타데이터를 가지며, 충돌 판정은 footprint에 포함되는 모든 cell을 사용합니다.
 
-| 이벤트 | 보상 |
+## 상태와 행동
+
+상태 벡터는 총 `16`차원입니다.
+
+| 구간 | 의미 |
 | --- | --- |
-| 이동 (매 스텝) | **-0.5** |
-| 웨이포인트 도달 | +100.0 |
-| 전체 임무 완료 | +300.0 |
-| 벽 충돌 | -5.0 |
-| 장애물 충돌 | -10.0 |
-| 에너지 소진 | -50.0 |
-| Reward Shaping | `γ·Φ(s') - Φ(s)` |
+| `0-1` | 정규화된 UAV 위치 `(x, y)` |
+| `2` | 정규화된 잔여 에너지 |
+| `3-5` | waypoint 방문 여부 |
+| `6-13` | 8방향 인접 장애물/경계 감지 |
+| `14-15` | 다음 waypoint까지의 정규화된 방향 |
 
-> 포텐셜 함수는 다음 목표까지의 **유클리드 거리의 음수**입니다.
-
-## 알고리즘
-
-### SAC (Soft Actor-Critic)
-
-- **Actor**: Squashed Gaussian Policy (`tanh`) 로 연속 행동을 샘플링합니다.
-- **Twin Critic**: 두 개의 Q-network 를 사용해 Q-value 과대추정을 줄입니다.
-- **Entropy regularization**: `alpha` 를 자동 조절해 탐색 강도를 학습 중 스스로 조정합니다.
-- **Soft target update**: Critic target network 를 천천히 갱신합니다.
-
-### 네트워크 구조
+행동 공간은 연속 2차원 `Box(-1, 1, shape=(2,))`입니다.
 
 ```text
-Actor  : Input (16) -> Linear(256) -> ReLU -> Linear(256) -> ReLU -> mean/log_std -> tanh
-Critic : Input (16 + 2) -> Linear(256) -> ReLU -> Linear(256) -> ReLU -> Q1, Q2
+dx = action[0] * max_step_size
+dy = action[1] * max_step_size
 ```
 
-### 학습 하이퍼파라미터
+## 보상
+
+| 이벤트 | 값 |
+| --- | --- |
+| 매 step | `-0.5` |
+| waypoint 도달 | `+100.0` |
+| 전체 mission 완료 | `+300.0` |
+| 벽 충돌 | `-5.0` |
+| 장애물 충돌 | `-10.0` |
+| 에너지 소진 | `-50.0` |
+| potential shaping | `gamma * Phi(s') - Phi(s)`, `gamma=0.99` |
+
+## SAC 튜닝값
 
 | 파라미터 | 값 |
 | --- | --- |
-| Actor 학습률 | `3e-4` |
-| Critic 학습률 | `3e-4` |
-| Alpha 학습률 | `3e-4` |
-| 할인율 `γ` | `0.99` |
-| Soft update `τ` | `0.005` |
-| 배치 크기 | `256` |
-| 리플레이 버퍼 | `200000` |
-| Hidden 차원 | `256` |
-| 초기 `alpha` | `0.2` |
-| 랜덤 탐색 구간 | `1000` steps |
-| 업데이트 주기 | `2` steps |
-| 학습 에피소드 수 | `1500` |
+| 학습 episode | `1000` |
+| Actor learning rate | `2e-4` |
+| Critic learning rate | `3e-4` |
+| Alpha learning rate | `1e-4` |
+| Gamma | `0.995` |
+| Tau | `0.005` |
+| Batch size | `256` |
+| Replay buffer | `500000` |
+| Random exploration warm-up | `5000` steps |
+| Update interval | every `1` step |
+| Initial alpha | `0.2` |
+| Gradient clip | `1.0` |
+| Hidden dim | `256` |
 
-## 실행 방법
+큰 환경에서는 episode가 길고 replay 다양성이 중요하므로 buffer와 warm-up을 늘렸습니다. Actor와 alpha 학습률은 낮춰서 탐색 정책과 entropy 계수가 급격히 흔들리지 않게 했고, `gamma=0.995`로 먼 waypoint 보상이 더 오래 전달되도록 했습니다.
 
-```bash
-cd 6_1_SAC
-python train.py
+학습 중 가장 좋은 100-episode rolling success checkpoint는 `sac_best_model.pt`로 저장되고, 마지막 모델은 `sac_model.pt`로 저장됩니다.
+
+## 실행
+
+PowerShell에서 repo root 기준:
+
+```powershell
+cd .\6_1_SAC
+..\venv\Scripts\python.exe .\train.py
 ```
 
-## 실험 결과
+저장된 모델과 로그를 다시 평가/시각화할 때:
 
-### 학습 곡선
+```powershell
+cd .\6_1_SAC
+..\venv\Scripts\python.exe .\test.py
+```
 
-![Training Curve](results/training_curve.png)
+## 결과 파일
 
-### 성공률
-
-![Success Rate](results/success_curve.png)
-
-### Actor 손실
-
-![Actor Loss](results/actor_loss.png)
-
-### Critic 손실
-
-![Critic Loss](results/critic_loss.png)
-
-### 엔트로피 계수(alpha)
-
-![Alpha Curve](results/alpha_curve.png)
-
-### 최적 경로
-
-![Best Path](results/best_path.png)
-
-### 비행 경로 애니메이션
-
-![Flight GIF](results/flight.gif)
+| 파일 | 내용 |
+| --- | --- |
+| `sac_model.pt` | 마지막 SAC 모델 |
+| `sac_best_model.pt` | 100-episode rolling success 기준 best checkpoint |
+| `training_log.csv` | episode별 reward, success, alpha, loss, buffer size |
+| `training_curve.png` | reward 곡선 |
+| `success_curve.png` | success rate 곡선 |
+| `actor_loss.png` | actor loss |
+| `critic_loss.png` | critic loss |
+| `alpha_curve.png` | entropy coefficient alpha |
+| `best_path.png` | 최종/최고 경로 plot |
+| `flight.gif` | 비행 경로 애니메이션 |

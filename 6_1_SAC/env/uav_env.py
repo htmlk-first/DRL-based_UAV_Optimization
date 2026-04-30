@@ -216,6 +216,10 @@ class UAVEnv(gym.Env):
         symbols = {0: "· ", 1: "██", 2: "◎ ", 3: "✈ ", 4: "✓ "}
         print(f"\nStep: {self.steps} | Energy: {self.energy:.1f}"
               f" | Visited: {self.visited}")
+        if self.grid_size * self.grid_size > 2500:
+            print("Grid render skipped for large grids; use saved PNG/GIF for visualization.")
+            return
+
         print("+" + "--" * self.grid_size + "+")
         for row in grid:
             line = "|" + "".join(symbols.get(c, "? ") for c in row) + "|"

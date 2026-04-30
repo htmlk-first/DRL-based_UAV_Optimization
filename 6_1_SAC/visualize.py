@@ -12,6 +12,9 @@ UAV 환경 시각화 모듈 (라이트 테마, SAC용)
 """
 import os
 import numpy as np
+import matplotlib
+
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import matplotlib.patheffects as pe
