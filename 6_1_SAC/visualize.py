@@ -43,6 +43,61 @@ ACCENT_YELLOW  = "#9a6700"
 MARKER_EDGE    = "#555555"
 
 
+def _label_scale(size):
+    if size >= 80:
+        return 1.45
+    if size >= 50:
+        return 1.25
+    return 1.0
+
+
+def _scaled(base, scale):
+    return int(round(base * scale))
+
+
+def _grid_step(size):
+    if size >= 80:
+        return 5
+    if size >= 50:
+        return 2
+    return 1
+
+
+def _grid_indices(size):
+    step = _grid_step(size)
+    indices = list(range(0, size + 1, step))
+    if indices[-1] != size:
+        indices.append(size)
+    return indices
+
+
+def _draw_grid_lines(ax, size, zorder=1):
+    step = _grid_step(size)
+    linewidth = 0.4 if step == 1 else 0.55
+    alpha = 0.6 if step == 1 else 0.38
+    for i in _grid_indices(size):
+        ax.axhline(i - 0.5, color=GRID_LINE,
+                   linewidth=linewidth, alpha=alpha, zorder=zorder)
+        ax.axvline(i - 0.5, color=GRID_LINE,
+                   linewidth=linewidth, alpha=alpha, zorder=zorder)
+
+
+def _path_figsize(size):
+    map_side = min(max(9.5, size * 0.16), 16.0)
+    return (map_side + 4.2, max(7.6, map_side * 0.78))
+
+
+def _gif_figsize(size):
+    map_side = min(max(7.0, size * 0.11), 11.0)
+    return (map_side + 3.8, map_side)
+
+
+def _label_x(col, size, dx):
+    if col >= size - 4:
+        return col - dx, "right"
+    return col + dx, "left"
+
+
 def _h2rgb(hex_color: str):
     h = hex_color.lstrip("#")
     return [int(h[i:i+2], 16) / 255.0 for i in (0, 2, 4)]
@@ -77,9 +132,7 @@ def _draw_grid_bg(ax, env):
               extent=[-0.5, size - 0.5, size - 0.5, -0.5],
               aspect="equal", interpolation="nearest", zorder=0)
 
-    for i in range(size + 1):
-        ax.axhline(i - 0.5, color=GRID_LINE, linewidth=0.4, alpha=0.6, zorder=1)
-        ax.axvline(i - 0.5, color=GRID_LINE, linewidth=0.4, alpha=0.6, zorder=1)
+    _draw_grid_lines(ax, size, zorder=1)
 
 
 def _cum_distances(path):
@@ -148,11 +201,12 @@ def plot_path(env, path=None, title="UAV Flight Path (SAC)", save_path=None):
     if path is None:
         path = env.path
     size = env.grid_size
+    fs = _label_scale(size)
     cmap = _path_cmap()
     n = len(path)
 
     fig, (ax, ax_info) = plt.subplots(
-        1, 2, figsize=(max(14, size * 0.85), max(8, size * 0.55)),
+        1, 2, figsize=_path_figsize(size),
         gridspec_kw={"width_ratios": [2.8, 1]}
     )
     _style_fig(fig)
@@ -172,11 +226,12 @@ def plot_path(env, path=None, title="UAV Flight Path (SAC)", save_path=None):
             t = i / max(n - 2, 1)
             ax.plot([path[i][1], path[i + 1][1]],
                     [path[i][0], path[i + 1][0]],
-                    "-", color=cmap(t), linewidth=2.8, alpha=0.9,
+                    "-", color=cmap(t), linewidth=max(3.0, 2.4 * fs), alpha=0.9,
                     solid_capstyle="round", zorder=3)
         for i, p in enumerate(path):
             t = i / max(n - 1, 1)
-            ax.plot(p[1], p[0], "o", color=cmap(t), ms=3.5, alpha=0.55, zorder=4)
+            ax.plot(p[1], p[0], "o", color=cmap(t),
+                    ms=max(3.5, 2.8 * fs), alpha=0.55, zorder=4)
 
     # 에너지 추적 (누적 유클리드 거리 기반)
     cum_dist = _cum_distances(path)
@@ -188,33 +243,48 @@ def plot_path(env, path=None, title="UAV Flight Path (SAC)", save_path=None):
                 energy_at_wp[j] = env.energy_budget - cum_dist[step_i]
 
     # 웨이포인트
+    label_dx = max(0.8, 0.8 * fs)
+    label_dy = max(1.2, 1.0 * fs)
+    energy_dy = max(1.5, 1.15 * fs)
     for i, wp in enumerate(env.waypoints):
         clr = VISITED_CLR if env.visited[i] else WP_COLOR
-        ax.plot(wp[1], wp[0], "*", color=clr, ms=18,
-                mec=MARKER_EDGE, mew=1, zorder=6)
+        text_x, text_ha = _label_x(wp[1], size, label_dx)
+        wp_label_y = wp[0] - label_dy
+        energy_label_y = wp[0] + energy_dy
+        if wp[0] >= size - 5:
+            wp_label_y = wp[0] - label_dy * 1.8
+            energy_label_y = wp[0] - label_dy * 0.6
+        ax.plot(wp[1], wp[0], "*", color=clr, ms=_scaled(18, fs),
+                mec=MARKER_EDGE, mew=1.2, zorder=6)
         ax.text(wp[1], wp[0], str(i + 1), ha="center", va="center",
-                fontsize=11, fontweight="bold", color="white", zorder=7)
-        ax.text(wp[1] + 0.38, wp[0] - 0.42, f"WP{i + 1}",
-                fontsize=13, fontweight="bold", color=clr, zorder=7,
-                path_effects=[pe.withStroke(linewidth=2, foreground=DARK_BG)])
+                fontsize=_scaled(11, fs), fontweight="bold",
+                color="white", zorder=7)
+        ax.text(text_x, wp_label_y, f"WP{i + 1}",
+                ha=text_ha, fontsize=_scaled(13, fs),
+                fontweight="bold", color=clr, zorder=7,
+                path_effects=[pe.withStroke(linewidth=max(2.0, 1.8 * fs),
+                                            foreground=DARK_BG)])
         if i in energy_at_wp:
             pct = energy_at_wp[i] / env.energy_budget * 100
-            ax.text(wp[1] + 0.38, wp[0] + 0.42,
-                    f"E:{pct:.0f}%", fontsize=12, color=VISITED_CLR, zorder=7,
-                    path_effects=[pe.withStroke(linewidth=2, foreground=DARK_BG)])
+            ax.text(text_x, energy_label_y,
+                    f"E:{pct:.0f}%", fontsize=_scaled(12, fs),
+                    ha=text_ha, color=VISITED_CLR, zorder=7,
+                    path_effects=[pe.withStroke(linewidth=max(2.0, 1.6 * fs),
+                                                foreground=DARK_BG)])
 
     # 시작점
     if path:
         s = path[0]
-        ax.plot(s[1], s[0], "s", color=START_COLOR, ms=13,
+        ax.plot(s[1], s[0], "s", color=START_COLOR, ms=_scaled(13, fs),
                 mec=MARKER_EDGE, mew=2, zorder=8)
         ax.text(s[1], s[0], "S", ha="center", va="center",
-                fontsize=12, fontweight="bold", color=DARK_BG, zorder=9)
+                fontsize=_scaled(12, fs), fontweight="bold",
+                color=DARK_BG, zorder=9)
 
     # 종료점
     if n > 1:
         e = path[-1]
-        ax.plot(e[1], e[0], "^", color=UAV_COLOR, ms=14,
+        ax.plot(e[1], e[0], "^", color=UAV_COLOR, ms=_scaled(15, fs),
                 mec=MARKER_EDGE, mew=2, zorder=8)
 
     # 컬러바
@@ -222,13 +292,15 @@ def plot_path(env, path=None, title="UAV Flight Path (SAC)", save_path=None):
     sm.set_array([])
     cbar = fig.colorbar(sm, ax=ax, orientation="horizontal",
                         fraction=0.03, pad=0.06)
-    cbar.set_label("Step", color=TEXT_CLR, fontsize=13)
-    cbar.ax.xaxis.set_tick_params(color=TEXT_CLR, labelcolor=TEXT_CLR, labelsize=11)
+    cbar.set_label("Step", color=TEXT_CLR, fontsize=_scaled(13, fs))
+    cbar.ax.xaxis.set_tick_params(color=TEXT_CLR, labelcolor=TEXT_CLR,
+                                  labelsize=_scaled(11, fs))
     cbar.outline.set_edgecolor(BORDER_CLR)
 
-    ax.set_title(title, fontsize=18, fontweight="bold", pad=10)
-    ax.set_xlabel("Column (Y)", fontsize=14)
-    ax.set_ylabel("Row (X)", fontsize=14)
+    ax.set_title(title, fontsize=_scaled(18, fs), fontweight="bold", pad=10)
+    ax.set_xlabel("Column (Y)", fontsize=_scaled(14, fs))
+    ax.set_ylabel("Row (X)", fontsize=_scaled(14, fs))
+    ax.tick_params(labelsize=_scaled(11, fs))
 
     # ── 통계 패널 ──
     ax_info.axis("off")
@@ -252,11 +324,12 @@ def plot_path(env, path=None, title="UAV Flight Path (SAC)", save_path=None):
     y = 0.95
     for label, value, clr in stats:
         ax_info.text(0.08, y, label, transform=ax_info.transAxes,
-                     fontsize=12, color=MUTED_CLR, va="top")
+                     fontsize=_scaled(12, fs), color=MUTED_CLR, va="top")
         ax_info.text(0.08, y - 0.06, value, transform=ax_info.transAxes,
-                     fontsize=19, fontweight="bold", color=clr, va="top")
+                     fontsize=_scaled(18, fs), fontweight="bold",
+                     color=clr, va="top")
         ax_info.text(0.08, y - 0.12, "─" * 22, transform=ax_info.transAxes,
-                     fontsize=9, color=BORDER_CLR, va="top")
+                     fontsize=_scaled(9, fs), color=BORDER_CLR, va="top")
         y -= 0.19
 
     plt.tight_layout()
@@ -455,9 +528,9 @@ def make_flight_gif(env, path=None, save_path="flight.gif",
         save_path = os.path.join(save_path, "flight.gif")
 
     size = env.grid_size
+    fs = _label_scale(size)
     if figsize is None:
-        side = max(6.5, size * 0.58)
-        figsize = (side + 3.2, side)
+        figsize = _gif_figsize(size)
 
     cmap = _path_cmap()
 
@@ -496,9 +569,7 @@ def make_flight_gif(env, path=None, save_path="flight.gif",
                   extent=[-0.5, size - 0.5, size - 0.5, -0.5],
                   aspect="equal", interpolation="nearest", zorder=0)
 
-        for i in range(size + 1):
-            ax.axhline(i - 0.5, color=GRID_LINE, lw=0.35, alpha=0.55, zorder=1)
-            ax.axvline(i - 0.5, color=GRID_LINE, lw=0.35, alpha=0.55, zorder=1)
+        _draw_grid_lines(ax, size, zorder=1)
 
         ax.set_xlim(-0.5, size - 0.5)
         ax.set_ylim(size - 0.5, -0.5)
@@ -511,34 +582,41 @@ def make_flight_gif(env, path=None, save_path="flight.gif",
                 t = i / max(nt - 2, 1)
                 ax.plot([trail[i][1], trail[i + 1][1]],
                         [trail[i][0], trail[i + 1][0]],
-                        "-", color=cmap(t), linewidth=2.8,
+                        "-", color=cmap(t), linewidth=max(3.0, 2.3 * fs),
                         alpha=0.88, solid_capstyle="round", zorder=3)
 
         visited = _visited_at(step_i)
 
         for j, wp in enumerate(env.waypoints):
             clr = VISITED_CLR if visited[j] else WP_COLOR
-            ax.plot(wp[1], wp[0], "*", color=clr, ms=14,
-                    mec=MARKER_EDGE, mew=1, zorder=5)
+            ax.plot(wp[1], wp[0], "*", color=clr, ms=_scaled(14, fs),
+                    mec=MARKER_EDGE, mew=1.2, zorder=5)
             ax.text(wp[1], wp[0], str(j + 1), ha="center", va="center",
-                    fontsize=11, fontweight="bold", color="white", zorder=6)
+                    fontsize=_scaled(10, fs), fontweight="bold",
+                    color="white", zorder=6)
 
         s = path[0]
-        ax.plot(s[1], s[0], "s", color=START_COLOR, ms=12,
+        ax.plot(s[1], s[0], "s", color=START_COLOR, ms=_scaled(12, fs),
                 mec=MARKER_EDGE, mew=1.5, zorder=5)
 
         cur = path[step_i]
-        ax.plot(cur[1], cur[0], "^", color=UAV_COLOR, ms=16,
+        ax.plot(cur[1], cur[0], "^", color=UAV_COLOR, ms=_scaled(16, fs),
                 mec=MARKER_EDGE, mew=1.8, zorder=7,
-                path_effects=[pe.withStroke(linewidth=3, foreground=PANEL_BG)])
+                path_effects=[pe.withStroke(linewidth=max(3.0, 2.6 * fs),
+                                            foreground=PANEL_BG)])
 
         energy_left = max(0.0, env.energy_budget - cum_dist[step_i])
         epct = energy_left / env.energy_budget
 
         ax.set_title(f"{title}  ·  Step {step_i} / {len(path) - 1}",
-                     fontsize=16, fontweight="bold", pad=8, color=TEXT_CLR)
-        ax.set_xlabel("Column (Y)", fontsize=13)
-        ax.set_ylabel("Row (X)", fontsize=13)
+                     fontsize=_scaled(16, fs), fontweight="bold",
+                     pad=8, color=TEXT_CLR)
+        ax.set_title(f"{title}  |  Step {step_i} / {len(path) - 1}",
+                     fontsize=_scaled(16, fs), fontweight="bold",
+                     pad=8, color=TEXT_CLR)
+        ax.set_xlabel("Column (Y)", fontsize=_scaled(13, fs))
+        ax.set_ylabel("Row (X)", fontsize=_scaled(13, fs))
+        ax.tick_params(labelsize=_scaled(10, fs))
 
         # ── 정보 패널 ──
         ax_info.axis("off")
@@ -557,10 +635,12 @@ def make_flight_gif(env, path=None, save_path="flight.gif",
                 edgecolor="none", zorder=3))
         ax_info.text(0.5, by + bh * 0.5 + 0.003,
                      f"{epct * 100:.0f}%",
-                     ha="center", va="center", fontsize=14, fontweight="bold",
+                     ha="center", va="center",
+                     fontsize=_scaled(14, fs), fontweight="bold",
                      color=TEXT_CLR, transform=ax_info.transAxes, zorder=4)
         ax_info.text(0.5, by + bh + 0.025, "ENERGY",
-                     ha="center", va="bottom", fontsize=12, color=MUTED_CLR,
+                     ha="center", va="bottom",
+                     fontsize=_scaled(12, fs), color=MUTED_CLR,
                      transform=ax_info.transAxes)
 
         n_vis = sum(visited)
@@ -574,15 +654,16 @@ def make_flight_gif(env, path=None, save_path="flight.gif",
         ]
         y = 0.76
         for lbl, val, clr in stat_rows:
-            ax_info.text(0.5, y, lbl, ha="center", va="top", fontsize=12,
+            ax_info.text(0.5, y, lbl, ha="center", va="top",
+                         fontsize=_scaled(12, fs),
                          color=MUTED_CLR, transform=ax_info.transAxes)
             ax_info.text(0.5, y - 0.065, val, ha="center", va="top",
-                         fontsize=18, fontweight="bold", color=clr,
+                         fontsize=_scaled(18, fs), fontweight="bold", color=clr,
                          transform=ax_info.transAxes)
             ax_info.text(0.5, y - 0.12, "──────────",
-                         ha="center", va="top", fontsize=9,
+                         ha="center", va="top", fontsize=_scaled(9, fs),
                          color=BORDER_CLR, transform=ax_info.transAxes)
-            y -= 0.18
+            y -= 0.15
 
         leg_items = [
             mpatches.Patch(facecolor=OBS_COLOR,   label="Obstacle"),
@@ -592,7 +673,7 @@ def make_flight_gif(env, path=None, save_path="flight.gif",
             mpatches.Patch(facecolor=UAV_COLOR,   label="UAV"),
         ]
         ax_info.legend(handles=leg_items, loc="lower center",
-                       fontsize=11, facecolor=DARK_BG,
+                       fontsize=_scaled(8, fs), facecolor=DARK_BG,
                        edgecolor=BORDER_CLR, labelcolor=TEXT_CLR,
                        bbox_to_anchor=(0.5, 0.01))
 
@@ -600,7 +681,7 @@ def make_flight_gif(env, path=None, save_path="flight.gif",
                           interval=1000 // fps, repeat=False)
 
     print(f"  Saving GIF: {len(path)} frames @ {fps} fps -> {save_path}")
-    anim.save(save_path, writer=PillowWriter(fps=fps), dpi=100)
+    anim.save(save_path, writer=PillowWriter(fps=fps), dpi=120)
     plt.close(fig)
     print(f"  GIF saved -> {save_path}")
 
