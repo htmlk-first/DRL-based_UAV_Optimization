@@ -95,6 +95,36 @@ cd .\6_2_SAC_3D
 ..\venv\Scripts\python.exe .\test.py
 ```
 
+## 실험 결과 시각화
+
+### 학습 곡선 (Training Curve)
+
+![Training Curve](results/training_curve.png)
+
+### 성공률 (Success Rate)
+
+![Success Rate](results/success_curve.png)
+
+### Actor Loss
+
+![Actor Loss](results/actor_loss.png)
+
+### Critic Loss
+
+![Critic Loss](results/critic_loss.png)
+
+### Alpha Curve
+
+![Alpha Curve](results/alpha_curve.png)
+
+### 최적 경로 3D (Best Path 3D)
+
+![Best Path 3D](results/best_path_3d.png)
+
+### 비행 경로 애니메이션 (Flight GIF)
+
+![Flight GIF](results/flight_3d.gif)
+
 ## 결과 파일
 
 | 파일 | 내용 |

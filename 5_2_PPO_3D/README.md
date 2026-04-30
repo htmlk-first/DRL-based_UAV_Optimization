@@ -95,6 +95,36 @@ cd .\5_2_PPO_3D
 ..\venv\Scripts\python.exe .\test.py
 ```
 
+## 실험 결과 시각화
+
+### 학습 곡선 (Training Curve)
+
+![Training Curve](results/training_curve.png)
+
+### 성공률 (Success Rate)
+
+![Success Rate](results/success_curve.png)
+
+### Policy Loss
+
+![Policy Loss](results/policy_loss.png)
+
+### Value Loss
+
+![Value Loss](results/value_loss.png)
+
+### Entropy
+
+![Entropy](results/entropy.png)
+
+### 최적 경로 3D (Best Path 3D)
+
+![Best Path 3D](results/best_path_3d.png)
+
+### 비행 경로 애니메이션 (Flight GIF)
+
+![Flight GIF](results/flight_3d.gif)
+
 ## 결과 파일
 
 학습과 평가 결과는 `results/` 아래에 저장됩니다.

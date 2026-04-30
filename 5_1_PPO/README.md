@@ -104,39 +104,39 @@ Critic: Input (16) -> Linear(256) -> ReLU -> Linear(256) -> ReLU -> V(s)
 | Hidden 차원 | `256` |
 | 학습 에피소드 수 | `8000` |
 
-## 실행 방법
+## 실행
 
 ```bash
 cd 5_1_PPO
 python train.py
 ```
 
-## 실험 결과
+## 실험 결과 시각화
 
-### 학습 곡선
+### 학습 곡선 (Training Curve)
 
 ![Training Curve](results/training_curve.png)
 
-### 성공률
+### 성공률 (Success Rate)
 
 ![Success Rate](results/success_curve.png)
 
-### Policy 손실
+### Policy Loss
 
 ![Policy Loss](results/policy_loss.png)
 
-### Value 손실
+### Value Loss
 
 ![Value Loss](results/value_loss.png)
 
-### 엔트로피 추이
+### Entropy
 
 ![Entropy](results/entropy.png)
 
-### 최적 경로
+### 최적 경로 (Best Path)
 
 ![Best Path](results/best_path.png)
 
-### 비행 경로 애니메이션
+### 비행 경로 애니메이션 (Flight GIF)
 
 ![Flight GIF](results/flight.gif)
