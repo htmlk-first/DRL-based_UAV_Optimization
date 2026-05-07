@@ -70,25 +70,7 @@ cd .\6_2_SAC_3D
 ..\venv\Scripts\python.exe .\test.py
 ```
 
-## 핵심 결과 갤러리
-
-각 행은 학습 reward curve와 최적 경로 시각화를 함께 보여줍니다. 세부 loss curve, entropy/alpha curve, flight GIF는 아래 산출물 표나 각 폴더 README에서 확인할 수 있습니다.
-
-### Training Curves
-
-| 실험 | Training Curve |
-| --- | --- |
-| `1_TQL` | <img src="1_TQL/results/training_curve.png" width="420"> |
-| `2_1_DQN` | <img src="2_1_DQN/results/training_curve.png" width="420"> |
-| `2_2_DQN_3D` | <img src="2_2_DQN_3D/results/training_curve.png" width="420"> |
-| `3_1_DDQN` | <img src="3_1_DDQN/results/training_curve.png" width="420"> |
-| `3_2_DDQN_3D` | <img src="3_2_DDQN_3D/results/training_curve.png" width="420"> |
-| `4_1_DDPG` | <img src="4_1_DDPG/results/training_curve.png" width="420"> |
-| `4_2_DDPG_3D` | <img src="4_2_DDPG_3D/results/training_curve.png" width="420"> |
-| `5_1_PPO` | <img src="5_1_PPO/results/training_curve.png" width="420"> |
-| `5_2_PPO_3D` | <img src="5_2_PPO_3D/results/training_curve.png" width="420"> |
-| `6_1_SAC` | <img src="6_1_SAC/results/training_curve.png" width="420"> |
-| `6_2_SAC_3D` | <img src="6_2_SAC_3D/results/training_curve.png" width="420"> |
+## 실험 결과
 
 ### Best Path + Flight GIF
 
