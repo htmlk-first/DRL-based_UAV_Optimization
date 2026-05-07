@@ -20,15 +20,6 @@ DRL 기반 UAV 경로 최적화 실험 모음입니다. UAV가 제한된 에너�
 | `6_1_SAC` | SAC | 2D | Continuous | `100x100` | [README](6_1_SAC/README.md) |
 | `6_2_SAC_3D` | SAC | 3D | Continuous | `100x100x10` | [README](6_2_SAC_3D/README.md) |
 
-## 실험 흐름
-
-- `1_TQL`은 작은 2D grid에서 tabular Q-learning의 기본 동작을 확인합니다.
-- `2_1_DQN`과 `2_2_DQN_3D`는 neural network 기반 Q-learning을 2D와 3D로 확장합니다.
-- `3_1_DDQN`과 `3_2_DDQN_3D`는 overestimation을 줄이기 위해 Double DQN 구조를 사용합니다.
-- `4_1_DDPG`와 `4_2_DDPG_3D`는 연속 제어 행동을 위해 actor-critic 기반 DDPG를 사용합니다.
-- `5_1_PPO`와 `5_2_PPO_3D`는 on-policy stochastic policy 최적화를 적용합니다.
-- `6_1_SAC`와 `6_2_SAC_3D`는 entropy-regularized off-policy 학습으로 연속 제어 환경을 다룹니다.
-
 ## 폴더 구조
 
 각 알고리즘 폴더는 대체로 다음 구조를 따릅니다.
