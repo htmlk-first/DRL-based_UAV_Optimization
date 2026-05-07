@@ -42,6 +42,12 @@ ACCENT_YELLOW  = "#9a6700"
 
 MARKER_EDGE    = "#555555"
 
+# ── 통일된 출력 규격 ─────────────────────────────────────────────────────────
+_FIG_SIZE      = (16, 9)
+_PANEL_RATIOS  = [1.4, 1.0]
+_PNG_DPI       = 140
+_GIF_DPI       = 100
+
 # Fallback for legacy building metadata. New environments provide size_x/size_y
 # so rendered footprint matches actual obstacle cells.
 BUILDING_FOOTPRINT_SIZE = 1.0
@@ -194,9 +200,9 @@ def _draw_3d_scene(ax, env, trail=None, visited=None):
     ax.set_xlim(-0.5, sx - 0.5)
     ax.set_ylim(-0.5, sy - 0.5)
     ax.set_zlim(-0.5, sz - 0.5)
-    ax.set_xlabel("X", fontsize=12)
-    ax.set_ylabel("Y", fontsize=12)
-    ax.set_zlabel("Z", fontsize=12)
+    ax.set_xlabel("X", fontsize=18)
+    ax.set_ylabel("Y", fontsize=18)
+    ax.set_zlabel("Z", fontsize=18)
 
     buildings = getattr(env, 'buildings', None)
     _draw_obstacle_cubes(ax, env.obstacles, alpha=0.18, buildings=buildings)
@@ -208,7 +214,7 @@ def _draw_3d_scene(ax, env, trail=None, visited=None):
                    edgecolors=MARKER_EDGE, linewidth=0.8, zorder=5,
                    depthshade=False)
         ax.text(wp[0] + 0.3, wp[1] + 0.3, wp[2] + 0.3,
-                f"WP{i+1}", fontsize=10, color=clr, fontweight="bold")
+                f"WP{i+1}", fontsize=15, color=clr, fontweight="bold")
 
     s = env.config.start_pos
     ax.scatter(*s, s=120, color=START_COLOR, marker="s",
@@ -233,10 +239,13 @@ def plot_path_3d(env, path=None, title="UAV 3D Flight Path (SAC)", save_path=Non
         path = env.path
     n = len(path)
 
-    fig = plt.figure(figsize=(16, 8))
+    fig = plt.figure(figsize=_FIG_SIZE)
     _style_fig(fig)
 
-    ax = fig.add_subplot(121, projection="3d")
+    gs = fig.add_gridspec(1, 2, width_ratios=_PANEL_RATIOS,
+                          left=0.04, right=0.97, top=0.95, bottom=0.06,
+                          wspace=0.12)
+    ax = fig.add_subplot(gs[0], projection="3d")
     _style_ax3d(ax)
 
     _draw_3d_scene(ax, env, trail=path)
@@ -251,7 +260,7 @@ def plot_path_3d(env, path=None, title="UAV 3D Flight Path (SAC)", save_path=Non
     sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(0, max(n - 1, 1)))
     sm.set_array([])
     cbar = fig.colorbar(sm, ax=ax, shrink=0.5, pad=0.08)
-    cbar.set_label("Step", color=TEXT_CLR, fontsize=11)
+    cbar.set_label("Step", color=TEXT_CLR, fontsize=17)
     cbar.ax.yaxis.set_tick_params(color=TEXT_CLR, labelcolor=TEXT_CLR, labelsize=9)
     cbar.outline.set_edgecolor(BORDER_CLR)
 
@@ -259,7 +268,7 @@ def plot_path_3d(env, path=None, title="UAV 3D Flight Path (SAC)", save_path=Non
     ax.view_init(elev=25, azim=-60)
 
     # ── 통계 패널 ──
-    ax_info = fig.add_subplot(122)
+    ax_info = fig.add_subplot(gs[1])
     ax_info.set_facecolor(PANEL_BG)
     for spine in ax_info.spines.values():
         spine.set_edgecolor(BORDER_CLR)
@@ -293,16 +302,15 @@ def plot_path_3d(env, path=None, title="UAV 3D Flight Path (SAC)", save_path=Non
     y = 0.92
     for label, value, clr in stats:
         ax_info.text(0.08, y, label, transform=ax_info.transAxes,
-                     fontsize=12, color=MUTED_CLR, va="top")
+                     fontsize=18, color=MUTED_CLR, va="top")
         ax_info.text(0.08, y - 0.05, value, transform=ax_info.transAxes,
                      fontsize=17, fontweight="bold", color=clr, va="top")
         ax_info.text(0.08, y - 0.095, "─" * 22, transform=ax_info.transAxes,
-                     fontsize=9, color=BORDER_CLR, va="top")
+                     fontsize=14, color=BORDER_CLR, va="top")
         y -= 0.13
 
-    plt.tight_layout()
     if save_path:
-        plt.savefig(save_path, dpi=150, bbox_inches="tight", facecolor=DARK_BG)
+        plt.savefig(save_path, dpi=_PNG_DPI, bbox_inches=None, facecolor=DARK_BG)
     plt.close(fig)
 
 
@@ -331,15 +339,15 @@ def plot_reward_curve(rewards, window=50,
             f"Best: {best_v:.0f}",
             xy=(x_ma[best_i], best_v),
             xytext=(x_ma[best_i] + len(rewards) * 0.04, best_v),
-            fontsize=8, color=ACCENT_YELLOW,
+            fontsize=13, color=ACCENT_YELLOW,
             arrowprops=dict(arrowstyle="->", color=ACCENT_YELLOW, lw=1.2),
         )
 
     ax.set_xlabel("Episode")
     ax.set_ylabel("Total Reward")
-    ax.set_title(title, fontsize=13, fontweight="bold", pad=10)
+    ax.set_title(title, fontsize=20, fontweight="bold", pad=10)
     ax.legend(facecolor=PANEL_BG, edgecolor=BORDER_CLR, labelcolor=TEXT_CLR,
-              fontsize=8)
+              fontsize=13)
     ax.grid(True, alpha=0.12, color=GRID_LINE)
 
     plt.tight_layout()
@@ -367,9 +375,9 @@ def plot_success_curve(success_history, window=50,
     ax.set_ylim(-3, 108)
     ax.set_xlabel("Episode")
     ax.set_ylabel("Success Rate (%)")
-    ax.set_title(title, fontsize=13, fontweight="bold", pad=10)
+    ax.set_title(title, fontsize=20, fontweight="bold", pad=10)
     ax.legend(facecolor=PANEL_BG, edgecolor=BORDER_CLR, labelcolor=TEXT_CLR,
-              fontsize=8)
+              fontsize=13)
     ax.grid(True, alpha=0.12, color=GRID_LINE)
 
     plt.tight_layout()
@@ -398,9 +406,9 @@ def plot_actor_loss(losses, window=50,
 
     ax.set_xlabel("Update Step")
     ax.set_ylabel("Actor Loss")
-    ax.set_title(title, fontsize=13, fontweight="bold", pad=10)
+    ax.set_title(title, fontsize=20, fontweight="bold", pad=10)
     ax.legend(facecolor=PANEL_BG, edgecolor=BORDER_CLR, labelcolor=TEXT_CLR,
-              fontsize=8)
+              fontsize=13)
     ax.grid(True, alpha=0.12, color=GRID_LINE)
 
     plt.tight_layout()
@@ -429,9 +437,9 @@ def plot_critic_loss(losses, window=50,
 
     ax.set_xlabel("Update Step")
     ax.set_ylabel("Critic Loss (MSE)")
-    ax.set_title(title, fontsize=13, fontweight="bold", pad=10)
+    ax.set_title(title, fontsize=20, fontweight="bold", pad=10)
     ax.legend(facecolor=PANEL_BG, edgecolor=BORDER_CLR, labelcolor=TEXT_CLR,
-              fontsize=8)
+              fontsize=13)
     ax.grid(True, alpha=0.12, color=GRID_LINE)
 
     plt.tight_layout()
@@ -460,9 +468,9 @@ def plot_alpha_curve(alphas, window=50,
 
     ax.set_xlabel("Update Step")
     ax.set_ylabel("α (Entropy Coefficient)")
-    ax.set_title(title, fontsize=13, fontweight="bold", pad=10)
+    ax.set_title(title, fontsize=20, fontweight="bold", pad=10)
     ax.legend(facecolor=PANEL_BG, edgecolor=BORDER_CLR, labelcolor=TEXT_CLR,
-              fontsize=8)
+              fontsize=13)
     ax.grid(True, alpha=0.12, color=GRID_LINE)
 
     plt.tight_layout()
@@ -493,11 +501,14 @@ def make_flight_gif_3d(env, path=None, title="UAV 3D Flight (SAC)",
                             vis[j] = True
         return vis
 
-    fig = plt.figure(figsize=(13, 8))
+    fig = plt.figure(figsize=_FIG_SIZE)
     _style_fig(fig)
 
-    ax = fig.add_subplot(121, projection="3d")
-    ax_info = fig.add_subplot(122)
+    gs = fig.add_gridspec(1, 2, width_ratios=_PANEL_RATIOS,
+                          left=0.04, right=0.97, top=0.93, bottom=0.07,
+                          wspace=0.15)
+    ax = fig.add_subplot(gs[0], projection="3d")
+    ax_info = fig.add_subplot(gs[1])
 
     def draw_frame(step_i):
         ax.cla()
@@ -550,7 +561,7 @@ def make_flight_gif_3d(env, path=None, title="UAV 3D Flight (SAC)",
                      ha="center", va="center", fontsize=14, fontweight="bold",
                      color=TEXT_CLR, transform=ax_info.transAxes, zorder=4)
         ax_info.text(0.5, by + bh + 0.025, "ENERGY",
-                     ha="center", va="bottom", fontsize=12, color=MUTED_CLR,
+                     ha="center", va="bottom", fontsize=18, color=MUTED_CLR,
                      transform=ax_info.transAxes)
 
         n_vis = sum(visited)
@@ -565,13 +576,13 @@ def make_flight_gif_3d(env, path=None, title="UAV 3D Flight (SAC)",
         ]
         y = 0.76
         for lbl, val, clr in stat_rows:
-            ax_info.text(0.5, y, lbl, ha="center", va="top", fontsize=12,
+            ax_info.text(0.5, y, lbl, ha="center", va="top", fontsize=18,
                          color=MUTED_CLR, transform=ax_info.transAxes)
             ax_info.text(0.5, y - 0.065, val, ha="center", va="top",
                          fontsize=18, fontweight="bold", color=clr,
                          transform=ax_info.transAxes)
             ax_info.text(0.5, y - 0.12, "──────────",
-                         ha="center", va="top", fontsize=9,
+                         ha="center", va="top", fontsize=14,
                          color=BORDER_CLR, transform=ax_info.transAxes)
             y -= 0.18
 
@@ -583,7 +594,7 @@ def make_flight_gif_3d(env, path=None, title="UAV 3D Flight (SAC)",
             mpatches.Patch(facecolor=UAV_COLOR,   label="UAV"),
         ]
         ax_info.legend(handles=leg_items, loc="lower center",
-                       fontsize=11, facecolor=DARK_BG,
+                       fontsize=17, facecolor=DARK_BG,
                        edgecolor=BORDER_CLR, labelcolor=TEXT_CLR,
                        bbox_to_anchor=(0.5, 0.01))
 
@@ -591,7 +602,8 @@ def make_flight_gif_3d(env, path=None, title="UAV 3D Flight (SAC)",
                           interval=1000 // fps, repeat=False)
 
     print(f"  Saving 3D GIF: {len(path)} frames @ {fps} fps -> {save_path}")
-    anim.save(save_path, writer=PillowWriter(fps=fps), dpi=100)
+    anim.save(save_path, writer=PillowWriter(fps=fps), dpi=_GIF_DPI,
+              savefig_kwargs={"facecolor": DARK_BG})
     plt.close(fig)
     print(f"  GIF saved -> {save_path}")
 
@@ -615,8 +627,8 @@ def plot_comparison(results_dict, window=50,
             ax.plot(range(window, len(rewards) + 1), ma,
                     color=clr, linewidth=2.2, label=name)
 
-    ax.set_xlabel("Episode", fontsize=13)
-    ax.set_ylabel(f"Total Reward (Moving Avg, w={window})", fontsize=13)
+    ax.set_xlabel("Episode", fontsize=20)
+    ax.set_ylabel(f"Total Reward (Moving Avg, w={window})", fontsize=20)
     ax.set_title(title, fontsize=15, fontweight="bold", pad=10)
     ax.legend(facecolor=PANEL_BG, edgecolor=BORDER_CLR, labelcolor=TEXT_CLR)
     ax.grid(True, alpha=0.12, color=GRID_LINE)

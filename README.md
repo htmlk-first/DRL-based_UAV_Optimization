@@ -61,20 +61,30 @@ cd .\6_2_SAC_3D
 ..\venv\Scripts\python.exe .\test.py
 ```
 
+11개 폴더의 결과 이미지를 한 번에 다시 만들고 싶다면 루트의 일괄 스크립트를 사용합니다.
+
+```powershell
+.\regenerate_results.ps1                       # 전체 11개 폴더 test.py 실행
+.\regenerate_results.ps1 -Only 1_TQL,2_1_DQN   # 특정 폴더만
+```
+
 ## 실험 결과
 
 ### Best Path + Flight GIF
 
+모든 결과 이미지는 통일된 16:9 비율 (figsize 16×9, PNG dpi=140 / GIF dpi=100) 으로 생성되며,
+README 미리보기 폭(`width="380"`)도 두 칼럼이 동일하게 정렬되도록 맞췄습니다.
+
 | 실험 | Best Path | Flight GIF |
 | --- | --- | --- |
-| `1_TQL` | <img src="1_TQL/results/best_path.png" width="300"> | <img src="1_TQL/results/flight.gif" width="260"> |
-| `2_1_DQN` | <img src="2_1_DQN/results/best_path.png" width="300"> | <img src="2_1_DQN/results/flight.gif" width="260"> |
-| `2_2_DQN_3D` | <img src="2_2_DQN_3D/results/best_path_3d.png" width="300"> | <img src="2_2_DQN_3D/results/flight_3d.gif" width="260"> |
-| `3_1_DDQN` | <img src="3_1_DDQN/results/best_path.png" width="300"> | <img src="3_1_DDQN/results/flight.gif" width="260"> |
-| `3_2_DDQN_3D` | <img src="3_2_DDQN_3D/results/best_path_3d.png" width="300"> | <img src="3_2_DDQN_3D/results/flight_3d.gif" width="260"> |
-| `4_1_DDPG` | <img src="4_1_DDPG/results/best_path.png" width="300"> | <img src="4_1_DDPG/results/flight.gif" width="260"> |
-| `4_2_DDPG_3D` | <img src="4_2_DDPG_3D/results/best_path_3d.png" width="300"> | <img src="4_2_DDPG_3D/results/flight_3d.gif" width="260"> |
-| `5_1_PPO` | <img src="5_1_PPO/results/best_path.png" width="300"> | <img src="5_1_PPO/results/flight.gif" width="260"> |
-| `5_2_PPO_3D` | <img src="5_2_PPO_3D/results/best_path_3d.png" width="300"> | <img src="5_2_PPO_3D/results/flight_3d.gif" width="260"> |
-| `6_1_SAC` | <img src="6_1_SAC/results/best_path.png" width="300"> | <img src="6_1_SAC/results/flight.gif" width="260"> |
-| `6_2_SAC_3D` | <img src="6_2_SAC_3D/results/best_path_3d.png" width="300"> | <img src="6_2_SAC_3D/results/flight_3d.gif" width="260"> |
+| `1_TQL` | <img src="1_TQL/results/best_path.png" width="380"> | <img src="1_TQL/results/flight.gif" width="380"> |
+| `2_1_DQN` | <img src="2_1_DQN/results/best_path.png" width="380"> | <img src="2_1_DQN/results/flight.gif" width="380"> |
+| `2_2_DQN_3D` | <img src="2_2_DQN_3D/results/best_path_3d.png" width="380"> | <img src="2_2_DQN_3D/results/flight_3d.gif" width="380"> |
+| `3_1_DDQN` | <img src="3_1_DDQN/results/best_path.png" width="380"> | <img src="3_1_DDQN/results/flight.gif" width="380"> |
+| `3_2_DDQN_3D` | <img src="3_2_DDQN_3D/results/best_path_3d.png" width="380"> | <img src="3_2_DDQN_3D/results/flight_3d.gif" width="380"> |
+| `4_1_DDPG` | <img src="4_1_DDPG/results/best_path.png" width="380"> | <img src="4_1_DDPG/results/flight.gif" width="380"> |
+| `4_2_DDPG_3D` | <img src="4_2_DDPG_3D/results/best_path_3d.png" width="380"> | <img src="4_2_DDPG_3D/results/flight_3d.gif" width="380"> |
+| `5_1_PPO` | <img src="5_1_PPO/results/best_path.png" width="380"> | <img src="5_1_PPO/results/flight.gif" width="380"> |
+| `5_2_PPO_3D` | <img src="5_2_PPO_3D/results/best_path_3d.png" width="380"> | <img src="5_2_PPO_3D/results/flight_3d.gif" width="380"> |
+| `6_1_SAC` | <img src="6_1_SAC/results/best_path.png" width="380"> | <img src="6_1_SAC/results/flight.gif" width="380"> |
+| `6_2_SAC_3D` | <img src="6_2_SAC_3D/results/best_path_3d.png" width="380"> | <img src="6_2_SAC_3D/results/flight_3d.gif" width="380"> |

@@ -35,6 +35,13 @@ ACCENT_YELLOW  = "#9a6700"
 
 MARKER_EDGE    = "#555555"   # 마커 테두리 (라이트 배경용)
 
+# ── 통일된 출력 규격 ─────────────────────────────────────────────────────────
+# Best Path / Flight GIF 모두 16:9, 동일한 패널 비율로 고정
+_FIG_SIZE      = (16, 9)
+_PANEL_RATIOS  = [1.4, 1.0]
+_PNG_DPI       = 140
+_GIF_DPI       = 100
+
 
 def _h2rgb(hex_color: str):
     """hex → [r, g, b] float 0-1"""
@@ -94,21 +101,21 @@ def plot_grid(env, title="UAV Grid Environment", save_path=None):
     ax.plot(s[1], s[0], "s", color=START_COLOR, ms=13,
             mec=MARKER_EDGE, mew=1.5, zorder=5)
     ax.text(s[1], s[0], "S", ha="center", va="center",
-            fontsize=8, fontweight="bold", color=DARK_BG, zorder=6)
+            fontsize=13, fontweight="bold", color=DARK_BG, zorder=6)
 
     for i, wp in enumerate(env.waypoints):
         clr = VISITED_CLR if env.visited[i] else WP_COLOR
         ax.plot(wp[1], wp[0], "*", color=clr, ms=16,
                 mec=MARKER_EDGE, mew=1, zorder=5)
         ax.text(wp[1], wp[0], str(i + 1), ha="center", va="center",
-                fontsize=7, fontweight="bold", color="white", zorder=6)
+                fontsize=11, fontweight="bold", color="white", zorder=6)
 
     ax.plot(env.uav_pos[1], env.uav_pos[0], "^",
             color=UAV_COLOR, ms=15, mec=MARKER_EDGE, mew=1.5, zorder=7)
 
     epct = env.energy / env.energy_budget * 100
     ax.set_title(f"{title}  |  Energy {epct:.0f}%  Step {env.steps}",
-                 fontsize=11, fontweight="bold", pad=8)
+                 fontsize=17, fontweight="bold", pad=8)
 
     legend_elements = [
         mpatches.Patch(facecolor=EMPTY_CLR,   edgecolor=GRID_LINE, label="Empty"),
@@ -118,7 +125,7 @@ def plot_grid(env, title="UAV Grid Environment", save_path=None):
         mpatches.Patch(facecolor=UAV_COLOR,                        label="UAV"),
         mpatches.Patch(facecolor=START_COLOR,                      label="Start"),
     ]
-    ax.legend(handles=legend_elements, loc="upper right", fontsize=7,
+    ax.legend(handles=legend_elements, loc="upper right", fontsize=11,
               facecolor=PANEL_BG, edgecolor=BORDER_CLR, labelcolor=TEXT_CLR)
     ax.set_xlabel("Column (Y)")
     ax.set_ylabel("Row (X)")
@@ -139,8 +146,8 @@ def plot_path(env, path=None, title="UAV Flight Path", save_path=None):
     n = len(path)
 
     fig, (ax, ax_info) = plt.subplots(
-        1, 2, figsize=(max(12, size * 0.75), max(6.5, size * 0.5)),
-        gridspec_kw={"width_ratios": [2.8, 1]}
+        1, 2, figsize=_FIG_SIZE,
+        gridspec_kw={"width_ratios": _PANEL_RATIOS}
     )
     _style_fig(fig)
     _style_ax(ax)
@@ -180,14 +187,14 @@ def plot_path(env, path=None, title="UAV Flight Path", save_path=None):
         ax.plot(wp[1], wp[0], "*", color=clr, ms=18,
                 mec=MARKER_EDGE, mew=1, zorder=6)
         ax.text(wp[1], wp[0], str(i + 1), ha="center", va="center",
-                fontsize=7, fontweight="bold", color="white", zorder=7)
+                fontsize=11, fontweight="bold", color="white", zorder=7)
         ax.text(wp[1] + 0.38, wp[0] - 0.42, f"WP{i + 1}",
-                fontsize=8, fontweight="bold", color=clr, zorder=7,
+                fontsize=13, fontweight="bold", color=clr, zorder=7,
                 path_effects=[pe.withStroke(linewidth=2, foreground=DARK_BG)])
         if i in energy_at_wp:
             pct = energy_at_wp[i] / env.energy_budget * 100
             ax.text(wp[1] + 0.38, wp[0] + 0.42,
-                    f"E:{pct:.0f}%", fontsize=7, color=VISITED_CLR, zorder=7,
+                    f"E:{pct:.0f}%", fontsize=11, color=VISITED_CLR, zorder=7,
                     path_effects=[pe.withStroke(linewidth=2, foreground=DARK_BG)])
 
     # 시작점
@@ -196,7 +203,7 @@ def plot_path(env, path=None, title="UAV Flight Path", save_path=None):
         ax.plot(s[1], s[0], "s", color=START_COLOR, ms=13,
                 mec=MARKER_EDGE, mew=2, zorder=8)
         ax.text(s[1], s[0], "S", ha="center", va="center",
-                fontsize=8, fontweight="bold", color=DARK_BG, zorder=9)
+                fontsize=13, fontweight="bold", color=DARK_BG, zorder=9)
 
     # 종료점
     if n > 1:
@@ -209,11 +216,11 @@ def plot_path(env, path=None, title="UAV Flight Path", save_path=None):
     sm.set_array([])
     cbar = fig.colorbar(sm, ax=ax, orientation="horizontal",
                         fraction=0.03, pad=0.06)
-    cbar.set_label("Step", color=TEXT_CLR, fontsize=8)
+    cbar.set_label("Step", color=TEXT_CLR, fontsize=13)
     cbar.ax.xaxis.set_tick_params(color=TEXT_CLR, labelcolor=TEXT_CLR, labelsize=7)
     cbar.outline.set_edgecolor(BORDER_CLR)
 
-    ax.set_title(title, fontsize=12, fontweight="bold", pad=8)
+    ax.set_title(title, fontsize=18, fontweight="bold", pad=8)
     ax.set_xlabel("Column (Y)")
     ax.set_ylabel("Row (X)")
 
@@ -239,16 +246,16 @@ def plot_path(env, path=None, title="UAV Flight Path", save_path=None):
     y = 0.95
     for label, value, clr in stats:
         ax_info.text(0.08, y, label, transform=ax_info.transAxes,
-                     fontsize=7, color=MUTED_CLR, va="top")
+                     fontsize=11, color=MUTED_CLR, va="top")
         ax_info.text(0.08, y - 0.055, value, transform=ax_info.transAxes,
-                     fontsize=11, fontweight="bold", color=clr, va="top")
+                     fontsize=17, fontweight="bold", color=clr, va="top")
         ax_info.text(0.08, y - 0.10, "─" * 22, transform=ax_info.transAxes,
-                     fontsize=6, color=BORDER_CLR, va="top")
+                     fontsize=10, color=BORDER_CLR, va="top")
         y -= 0.17
 
-    plt.tight_layout()
+    fig.tight_layout(pad=1.5)
     if save_path:
-        plt.savefig(save_path, dpi=150, bbox_inches="tight", facecolor=DARK_BG)
+        plt.savefig(save_path, dpi=_PNG_DPI, bbox_inches=None, facecolor=DARK_BG)
     plt.close(fig)
 
 
@@ -278,15 +285,15 @@ def plot_reward_curve(rewards, window=50,
             f"Best: {best_v:.0f}",
             xy=(x_ma[best_i], best_v),
             xytext=(x_ma[best_i] + len(rewards) * 0.04, best_v),
-            fontsize=8, color=ACCENT_YELLOW,
+            fontsize=13, color=ACCENT_YELLOW,
             arrowprops=dict(arrowstyle="->", color=ACCENT_YELLOW, lw=1.2),
         )
 
     ax.set_xlabel("Episode")
     ax.set_ylabel("Total Reward")
-    ax.set_title(title, fontsize=13, fontweight="bold", pad=10)
+    ax.set_title(title, fontsize=20, fontweight="bold", pad=10)
     ax.legend(facecolor=PANEL_BG, edgecolor=BORDER_CLR, labelcolor=TEXT_CLR,
-              fontsize=8)
+              fontsize=13)
     ax.grid(True, alpha=0.12, color=GRID_LINE)
 
     plt.tight_layout()
@@ -315,9 +322,9 @@ def plot_success_curve(success_history, window=50,
     ax.set_ylim(-3, 108)
     ax.set_xlabel("Episode")
     ax.set_ylabel("Success Rate (%)")
-    ax.set_title(title, fontsize=13, fontweight="bold", pad=10)
+    ax.set_title(title, fontsize=20, fontweight="bold", pad=10)
     ax.legend(facecolor=PANEL_BG, edgecolor=BORDER_CLR, labelcolor=TEXT_CLR,
-              fontsize=8)
+              fontsize=13)
     ax.grid(True, alpha=0.12, color=GRID_LINE)
 
     plt.tight_layout()
@@ -390,21 +397,21 @@ def plot_qvalue_heatmap(agent, env, waypoint_idx=0,
         ax.plot(wp[1], wp[0], "*", color=clr, ms=14,
                 mec=MARKER_EDGE, mew=1, zorder=6)
         ax.text(wp[1], wp[0], str(i + 1), ha="center", va="center",
-                fontsize=7, fontweight="bold", color="white", zorder=7)
+                fontsize=11, fontweight="bold", color="white", zorder=7)
 
     s = env.config.start_pos
     ax.plot(s[1], s[0], "s", color=START_COLOR, ms=11,
             mec=MARKER_EDGE, mew=1.5, zorder=6)
 
     cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
-    cbar.set_label("Max Q-Value", color=TEXT_CLR, fontsize=9)
+    cbar.set_label("Max Q-Value", color=TEXT_CLR, fontsize=14)
     cbar.ax.yaxis.set_tick_params(color=TEXT_CLR, labelcolor=TEXT_CLR, labelsize=7)
     cbar.outline.set_edgecolor(BORDER_CLR)
 
     visited_str = ("None" if waypoint_idx == 0 else
                    " → ".join(f"WP{i + 1}" for i in range(waypoint_idx)))
     ax.set_title(f"{title}\nVisited: {visited_str}  |  Max Q across all energy levels",
-                 fontsize=11, fontweight="bold", pad=8)
+                 fontsize=17, fontweight="bold", pad=8)
     ax.set_xlabel("Column (Y)")
     ax.set_ylabel("Row (X)")
 
@@ -437,8 +444,7 @@ def make_flight_gif(env, path=None, title="UAV Flight",
 
     size = env.grid_size
     if figsize is None:
-        side = max(6.5, size * 0.58)
-        figsize = (side + 3.2, side)
+        figsize = _FIG_SIZE
 
     cmap = _path_cmap()
 
@@ -459,9 +465,10 @@ def make_flight_gif(env, path=None, title="UAV Flight",
 
     fig, (ax, ax_info) = plt.subplots(
         1, 2, figsize=figsize,
-        gridspec_kw={"width_ratios": [3.2, 1]}
+        gridspec_kw={"width_ratios": _PANEL_RATIOS}
     )
     _style_fig(fig)
+    fig.subplots_adjust(left=0.05, right=0.97, top=0.93, bottom=0.07, wspace=0.15)
 
     def draw_frame(step_i):
         ax.cla()
@@ -503,7 +510,7 @@ def make_flight_gif(env, path=None, title="UAV Flight",
             ax.plot(wp[1], wp[0], "*", color=clr, ms=14,
                     mec=MARKER_EDGE, mew=1, zorder=5)
             ax.text(wp[1], wp[0], str(j + 1), ha="center", va="center",
-                    fontsize=7, fontweight="bold", color="white", zorder=6)
+                    fontsize=11, fontweight="bold", color="white", zorder=6)
 
         # 시작점
         s = path[0]
@@ -522,9 +529,9 @@ def make_flight_gif(env, path=None, title="UAV Flight",
         epct = energy_left / env.energy_budget
 
         ax.set_title(f"{title}  ·  Step {step_i} / {len(path) - 1}",
-                     fontsize=10, fontweight="bold", pad=7, color=TEXT_CLR)
-        ax.set_xlabel("Column (Y)", fontsize=8)
-        ax.set_ylabel("Row (X)", fontsize=8)
+                     fontsize=15, fontweight="bold", pad=7, color=TEXT_CLR)
+        ax.set_xlabel("Column (Y)", fontsize=13)
+        ax.set_ylabel("Row (X)", fontsize=13)
 
         # ── 정보 패널 ──
         ax_info.axis("off")
@@ -544,10 +551,10 @@ def make_flight_gif(env, path=None, title="UAV Flight",
                 edgecolor="none", zorder=3))
         ax_info.text(0.5, by + bh * 0.5 + 0.003,
                      f"{epct * 100:.0f}%",
-                     ha="center", va="center", fontsize=9, fontweight="bold",
+                     ha="center", va="center", fontsize=14, fontweight="bold",
                      color=TEXT_CLR, transform=ax_info.transAxes, zorder=4)
         ax_info.text(0.5, by + bh + 0.025, "ENERGY",
-                     ha="center", va="bottom", fontsize=7, color=MUTED_CLR,
+                     ha="center", va="bottom", fontsize=11, color=MUTED_CLR,
                      transform=ax_info.transAxes)
 
         # 통계
@@ -562,13 +569,13 @@ def make_flight_gif(env, path=None, title="UAV Flight",
         ]
         y = 0.76
         for lbl, val, clr in stat_rows:
-            ax_info.text(0.5, y, lbl, ha="center", va="top", fontsize=6.5,
+            ax_info.text(0.5, y, lbl, ha="center", va="top", fontsize=11,
                          color=MUTED_CLR, transform=ax_info.transAxes)
             ax_info.text(0.5, y - 0.057, val, ha="center", va="top",
-                         fontsize=11, fontweight="bold", color=clr,
+                         fontsize=17, fontweight="bold", color=clr,
                          transform=ax_info.transAxes)
             ax_info.text(0.5, y - 0.098, "──────────",
-                         ha="center", va="top", fontsize=6,
+                         ha="center", va="top", fontsize=10,
                          color=BORDER_CLR, transform=ax_info.transAxes)
             y -= 0.155
 
@@ -580,7 +587,7 @@ def make_flight_gif(env, path=None, title="UAV Flight",
             mpatches.Patch(facecolor=UAV_COLOR,   label="UAV"),
         ]
         ax_info.legend(handles=leg_items, loc="lower center",
-                       fontsize=6.5, facecolor=DARK_BG,
+                       fontsize=11, facecolor=DARK_BG,
                        edgecolor=BORDER_CLR, labelcolor=TEXT_CLR,
                        bbox_to_anchor=(0.5, 0.01))
 
@@ -588,7 +595,8 @@ def make_flight_gif(env, path=None, title="UAV Flight",
                           interval=1000 // fps, repeat=False)
 
     print(f"  Saving GIF: {len(path)} frames @ {fps} fps → {save_path}")
-    anim.save(save_path, writer=PillowWriter(fps=fps), dpi=100)
+    anim.save(save_path, writer=PillowWriter(fps=fps), dpi=_GIF_DPI,
+              savefig_kwargs={"facecolor": DARK_BG})
     plt.close(fig)
     print(f"  GIF saved → {save_path}")
 
@@ -615,7 +623,7 @@ def plot_comparison(results_dict, window=50,
 
     ax.set_xlabel("Episode")
     ax.set_ylabel(f"Total Reward (Moving Avg, w={window})")
-    ax.set_title(title, fontsize=13, fontweight="bold", pad=10)
+    ax.set_title(title, fontsize=20, fontweight="bold", pad=10)
     ax.legend(facecolor=PANEL_BG, edgecolor=BORDER_CLR, labelcolor=TEXT_CLR)
     ax.grid(True, alpha=0.12, color=GRID_LINE)
     ax.axhline(0, color=BORDER_CLR, linewidth=0.7, linestyle="--", alpha=0.5)
